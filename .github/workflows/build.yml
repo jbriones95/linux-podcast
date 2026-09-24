@@ -19,7 +19,12 @@ jobs:
           python3 -m venv /tmp/pmbvenv
           # shellcheck disable=SC1091
           source /tmp/pmbvenv/bin/activate
-          pip install -q pmbootstrap
+          # pmbootstrap is NOT on PyPI ("from versions: none"); it lives on
+          # postmarketOS's own GitLab. Clone it and install from source.
+          git clone -q --depth 1 \
+            https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git \
+            /tmp/pmbootstrap
+          pip install -q -e /tmp/pmbootstrap
           sudo apt-get update -qq
           sudo apt-get install -y -qq git python3-pip patch pkgconf openssl \
             rsync sudo qemu-user qemu-user-static binfmt-support

@@ -58,24 +58,9 @@ jobs:
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
           mkdir -p ~/.config
-          cat > ~/.config/pmbootstrap.cfg <<'CFG'
-          [pmbootstrap]
-          aports = /tmp/pmaports
-          arch = aarch64
-          build_default_device_arch = True
-          ccache_size = 4G
-          extra_space = 4G
-          jobs = 4
-          mirror_alpine = http://dl-cdn.alpinelinux.org/alpine/
-          mirror_postmarketos = http://mirror.postmarketos.org/postmarketos/
-          work = /tmp/pmbwork
-          user = user
-          CFG
-          # Configure device/arch explicitly before init
-          pmbootstrap config device oneplus-fajita
-          pmbootstrap config arch aarch64
-          # Non-interactive init
-          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
+          # Let pmbootstrap init generate the config with the new format
+          # Pass device and arch via command line, pipe newlines for prompts
+          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init --device oneplus-fajita --arch aarch64 --aports /tmp/pmaports || true
           pmbootstrap --version
 
       - name: Build postcast apk
@@ -83,10 +68,10 @@ jobs:
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
           cd /tmp/pmaports/testing/postcast
-          pmbootstrap checksum postcast
-          pmbootstrap build postcast
+          pmbootstrap --aports /tmp/pmaports checksum postcast
+          pmbootstrap --aports /tmp/pmaports build postcast
           # pmbootstrap may refuse to rebuild an unchanged version; force it
-          pmbootstrap build postcast --force || true
+          pmbootstrap --aports /tmp/pmaports build postcast --force || true
 
       - name: Locate and upload artifact
         uses: actions/upload-artifact@v4

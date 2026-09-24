@@ -51,16 +51,17 @@ jobs:
           mkdir -p ~/.ssh ~/.gnupg
           chmod 700 ~/.ssh ~/.gnupg
 
-      - name: pmbootstrap init (non-interactive, aarch64, our own pmaports)
+- name: pmbootstrap init (non-interactive, aarch64, our own pmaports)
         env:
           DEVICE: oneplus-fajita
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
-          mkdir -p ~/.config
-          # Let pmbootstrap init generate the config with the new format
-          # Pass device and arch via command line, pipe newlines for prompts
-          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init --device oneplus-fajita --arch aarch64 --aports /tmp/pmaports || true
+          # Let pmbootstrap init generate config with defaults, then configure our settings
+          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
+          pmbootstrap config aports /tmp/pmaports
+          pmbootstrap config device oneplus-fajita
+          pmbootstrap config arch aarch64
           pmbootstrap --version
 
       - name: Build postcast apk

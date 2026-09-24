@@ -8,3 +8,8 @@ dist/
 *.db-wal
 *.db-shm
 .DS_Store
+
+# build/package artifacts (rebuilt by the release workflow)
+*.apk
+*-tmp/
+.apk-build/

@@ -20,12 +20,26 @@ jobs:
           # shellcheck disable=SC1091
           source /tmp/pmbvenv/bin/activate
           pip install -q pmbootstrap
-          # pmbootstrap needs pgrep/pmbboot... install its runtime deps
           sudo apt-get update -qq
           sudo apt-get install -y -qq git python3-pip patch pkgconf openssl \
             rsync sudo qemu-user qemu-user-static binfmt-support
-          # native tools needed inside pmbootstrap chroots (noninteractive)
           echo "export PATH=/tmp/pmbvenv/bin:\$PATH" >> "$GITHUB_ENV"
+
+      - name: Clone pmaports (pmbootstrap wants a real aports dir)
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git /tmp/pmaports
+          # our APKBUILD + source tarball live in the repo; put them under
+          # testing/postcast in the pmaports tree and let pmbootstrap checksum it
+          cp -r postcast /tmp/pmaports/testing/
+          mkdir -p /tmp/pmaports/testing/postcast
+          cp APKBUILD /tmp/pmaports/testing/postcast/APKBUILD
+          cp data/io.postcast.Postcast.svg /tmp/pmaports/testing/postcast/
+          cp data/io.postcast.Postcast.desktop /tmp/pmaports/testing/postcast/
+          cp data/io.postcast.Postcast.metainfo.xml /tmp/pmaports/testing/postcast/
+          tar -C postcast -czf /tmp/pmaports/testing/postcast/postcast-0.1.0.tar.gz \
+            --transform "s|^|postcast-0.1.0/|" . 2>/dev/null || \
+            tar -C . -czf /tmp/pmaports/testing/postcast/postcast-0.1.0.tar.gz postcast-0.1.0
 
       - name: Set up ssh/gnupg for apk signing
         run: |
@@ -38,12 +52,10 @@ jobs:
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
-          # answer every prompt with the defaults, but force device+arch
-          # via the pmbootstrap config file we write ourselves
           mkdir -p ~/.config
           cat > ~/.config/pmbootstrap.cfg <<'CFG'
           [pmbootstrap]
-          aports = /github/workspace/pmaports
+          aports = /tmp/pmaports
           arch = aarch64
           build_default_device_arch = True
           ccache_size = 4G
@@ -52,24 +64,21 @@ jobs:
           mirror_alpine = http://dl-cdn.alpinelinux.org/alpine/
           mirror_postmarketos = http://mirror.postmarketos.org/postmarketos/
           work = /tmp/pmbwork
-          device = oneplus-fajita
           user = user
-          vendor = oneplus
           CFG
+          # pmbootstrap init will prompt; answer with defaults
+          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | python3 -m pmbootstrap init || true
           python3 -m pmbootstrap --version
-          # point at our own aports (pmbootstrap clones pmaports if missing)
-          python3 -m pmbootstrap init --device oneplus-fajita --vendor oneplus \
-            --arch aarch64 <<< "y"
 
       - name: Build postcast apk
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
-          cp -r postcast pmaports/testing/
-          cd pmaports && cd testing/postcast
-          # put our package into the real aports tree the way pmbootstrap wants
+          cd /tmp/pmaports/testing/postcast
           python3 -m pmbootstrap checksum postcast
           python3 -m pmbootstrap build postcast
+          # pmbootstrap may refuse to rebuild an unchanged version; force it
+          python3 -m pmbootstrap build postcast --force || true
 
       - name: Locate and upload artifact
         uses: actions/upload-artifact@v4

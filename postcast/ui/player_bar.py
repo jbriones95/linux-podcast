@@ -60,6 +60,11 @@ class PlayerBar(Gtk.Box):
         artist_label = self.title_label
         title_box.append(artist_label)
 
+        for widget in (self.art, title_box, self.time_label):
+            gesture = Gtk.GestureClick.new()
+            gesture.connect("released", self._on_open_full_player)
+            widget.add_controller(gesture)
+
         self.row.append(self.art)
         self.row.append(title_box)
         self.row.append(self.time_label)
@@ -120,6 +125,10 @@ class PlayerBar(Gtk.Box):
     # ---- interactions ----
     def _on_play_clicked(self, btn):
         self.app.playback.toggle()
+
+    def _on_open_full_player(self, gesture, n_press, x, y):
+        if n_press == 1:
+            self.window.open_now_playing()
 
     def _on_seek_pressed(self, *args):
         self._seeking = True

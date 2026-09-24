@@ -124,7 +124,7 @@ class PodcastPage(Adw.NavigationPage):
     # ---------- download status ----------
     def _on_row_activated(self, listbox, row):
         if isinstance(row, EpisodeRow):
-            row._on_play()
+            self.window.open_episode(row.episode.id, self.podcast_id)
 
     def update_row_download(self, episode_id, downloading):
         for ep_id, row in self._rows.items():

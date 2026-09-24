@@ -13,6 +13,8 @@ from ..ui.library_page import LibraryPage
 from ..ui.podcast_page import PodcastPage
 from ..ui.search_page import SearchPage
 from ..ui.settings_page import SettingsPage
+from ..ui.episode_page import EpisodePage
+from ..ui.now_playing_page import NowPlayingPage
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -72,6 +74,16 @@ class MainWindow(Adw.ApplicationWindow):
     def open_podcast(self, podcast_id):
         page = PodcastPage(self, podcast_id)
         self.nav.push(page)
+
+    def open_episode(self, episode_id, podcast_id=None):
+        page = EpisodePage(self, episode_id, podcast_id)
+        self.nav.push(page)
+
+    def open_now_playing(self):
+        if self.app.playback.current_episode() is None:
+            self.toast("Nothing is playing.")
+            return
+        self.nav.push(NowPlayingPage(self))
 
     def add_dialog(self):
         entry = Gtk.Entry(placeholder_text="https://…/feed.xml")

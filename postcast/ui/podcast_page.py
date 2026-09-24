@@ -73,7 +73,7 @@ class PodcastPage(Adw.NavigationPage):
         desc.set_wrap(True)
         desc.set_xalign(0)
         desc.set_lines(4)
-        desc.set_ellipsize(True)
+        desc.set_ellipsize(Pango.EllipsizeMode.END)
 
         unsub_btn = Gtk.Button(label="Unsubscribe")
         unsub_btn.add_css_class("destructive-action")

@@ -1,0 +1,86 @@
+name: build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pmbootstrap + build toolchain (native aarch64 via qemu-user)
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/pmbvenv
+          # shellcheck disable=SC1091
+          source /tmp/pmbvenv/bin/activate
+          pip install -q pmbootstrap
+          # pmbootstrap needs pgrep/pmbboot... install its runtime deps
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq git python3-pip patch pkgconf openssl \
+            rsync sudo qemu-user qemu-user-static binfmt-support
+          # native tools needed inside pmbootstrap chroots (noninteractive)
+          echo "export PATH=/tmp/pmbvenv/bin:\$PATH" >> "$GITHUB_ENV"
+
+      - name: Set up ssh/gnupg for apk signing
+        run: |
+          mkdir -p ~/.ssh ~/.gnupg
+          chmod 700 ~/.ssh ~/.gnupg
+
+      - name: pmbootstrap init (non-interactive, aarch64, our own pmaports)
+        env:
+          DEVICE: oneplus-fajita
+        run: |
+          set -euo pipefail
+          source /tmp/pmbvenv/bin/activate
+          # answer every prompt with the defaults, but force device+arch
+          # via the pmbootstrap config file we write ourselves
+          mkdir -p ~/.config
+          cat > ~/.config/pmbootstrap.cfg <<'CFG'
+          [pmbootstrap]
+          aports = /github/workspace/pmaports
+          arch = aarch64
+          build_default_device_arch = True
+          ccache_size = 4G
+          extra_space = 4G
+          jobs = 4
+          mirror_alpine = http://dl-cdn.alpinelinux.org/alpine/
+          mirror_postmarketos = http://mirror.postmarketos.org/postmarketos/
+          work = /tmp/pmbwork
+          device = oneplus-fajita
+          user = user
+          vendor = oneplus
+          CFG
+          python3 -m pmbootstrap --version
+          # point at our own aports (pmbootstrap clones pmaports if missing)
+          python3 -m pmbootstrap init --device oneplus-fajita --vendor oneplus \
+            --arch aarch64 <<< "y"
+
+      - name: Build postcast apk
+        run: |
+          set -euo pipefail
+          source /tmp/pmbvenv/bin/activate
+          cp -r postcast pmaports/testing/
+          cd pmaports && cd testing/postcast
+          # put our package into the real aports tree the way pmbootstrap wants
+          python3 -m pmbootstrap checksum postcast
+          python3 -m pmbootstrap build postcast
+
+      - name: Locate and upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postcast-apk
+          path: |
+            /tmp/pmbwork/packages/**/*.apk
+
+      - name: Create GitHub release with the apk
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/pmbwork/packages/**/*.apk
+          draft: true

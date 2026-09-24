@@ -83,14 +83,14 @@ class SearchPage(Adw.NavigationPage):
 
             text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             title = Gtk.Label(label=item["title"])
-            title.set_ellipsize(True)
+            title.set_ellipsize(Pango.EllipsizeMode.END)
             title.set_xalign(0)
             title.add_css_class("title-2")
 
             sub = Gtk.Label(
                 label=f"{item['author']} · {item['track_count']} episodes"
             )
-            sub.set_ellipsize(True)
+            sub.set_ellipsize(Pango.EllipsizeMode.END)
             sub.set_xalign(0)
             sub.add_css_class("dim-label")
 

@@ -1,7 +1,7 @@
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, Pango
 
 from ..models import Episode
 
@@ -45,9 +45,8 @@ class EpisodeRow(Gtk.ListBoxRow):
         text_box.set_hexpand(True)
 
         self.title = Gtk.Label(label=episode.title or "Untitled")
-        self.title.set_ellipsize(True)
+        self.title.set_ellipsize(Pango.EllipsizeMode.END)
         self.title.set_xalign(0)
-        self.title.set_wrap(True)
         self.title.add_css_class("title-2")
 
         self.meta = Gtk.Label(
@@ -115,7 +114,7 @@ class EpisodeRow(Gtk.ListBoxRow):
     def _update_play_icon(self):
         playing = self.window.is_current(self.episode.id)
         if playing and self.app.player.is_playing():
-            self.play_btn.set_icon_name("media-pause-symbolic")
+            self.play_btn.set_icon_name("media-playback-pause-symbolic")
         else:
             self.play_btn.set_icon_name("media-playback-start-symbolic")
 

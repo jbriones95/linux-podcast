@@ -1,7 +1,7 @@
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, Pango
 
 
 class PlayerBar(Gtk.Box):
@@ -35,7 +35,7 @@ class PlayerBar(Gtk.Box):
         self.art.add_css_class("player-art")
 
         self.title_label = Gtk.Label(label="")
-        self.title_label.set_ellipsize(True)
+        self.title_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.title_label.set_xalign(0)
         self.title_label.set_hexpand(True)
         self.title_label.add_css_class("title")
@@ -76,7 +76,7 @@ class PlayerBar(Gtk.Box):
         self._current_episode_id = episode.id
         self.title_label.set_text(episode.title or "Unknown episode")
         self.set_visible(True)
-        self._btn_play.set_icon_name("media-pause-symbolic")
+        self._btn_play.set_icon_name("media-playback-pause-symbolic")
         self.app.artwork.load(podcast.image_url, 80, self._set_artwork)
         self.app.playback.set_source(podcast, episode)
 
@@ -105,7 +105,7 @@ class PlayerBar(Gtk.Box):
 
     def on_state_changed(self, state):
         self._btn_play.set_icon_name(
-            "media-pause-symbolic" if state == "playing" else "media-playback-start-symbolic"
+            "media-playback-pause-symbolic" if state == "playing" else "media-playback-start-symbolic"
         )
 
     def on_finished(self):

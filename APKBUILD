@@ -2,7 +2,7 @@
 # Contributor: Jose Briones <thedumbphoneshow@gmail.com>
 
 pkgname=postcast
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=0
 pkgdesc="GTK4 podcast manager for postmarketOS"
 url="https://github.com/jbriones95/linux-podcast"
@@ -32,7 +32,7 @@ package() {
 from postcast.__main__ import main
 import sys
 
-sys.exit(main(sys.argv[1:]))
+sys.exit(main())
 LAUNCH
 
 	install -Dm644 "$builddir/data/io.postcast.Postcast.desktop" \

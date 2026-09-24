@@ -29,17 +29,46 @@ class PostcastApplication(Adw.Application, GObject.Object):
             flags=Gio.ApplicationFlags.FLAGS_NONE,
         )
         GLib.set_application_name(APP_NAME)
-        self.db = Database()
-        self.artwork = ArtworkCache()
-        self.downloads = DownloadManager(self._download_dir())
-        self.player = Player()
-        self.playback = Playback(self, self.player)
+        self._db = None
+        self._artwork = None
+        self._downloads = None
+        self._player = None
+        self._playback = None
         self.window = None
 
-        self.downloads.connect("download-started", self._on_dl_started)
-        self.downloads.connect("download-progress", self._on_dl_progress)
-        self.downloads.connect("download-finished", self._on_dl_finished)
-        self.downloads.connect("download-failed", self._on_dl_failed)
+    @property
+    def db(self):
+        if self._db is None:
+            self._db = Database()
+        return self._db
+
+    @property
+    def artwork(self):
+        if self._artwork is None:
+            self._artwork = ArtworkCache()
+        return self._artwork
+
+    @property
+    def downloads(self):
+        if self._downloads is None:
+            self._downloads = DownloadManager(self._download_dir())
+            self._downloads.connect("download-started", self._on_dl_started)
+            self._downloads.connect("download-progress", self._on_dl_progress)
+            self._downloads.connect("download-finished", self._on_dl_finished)
+            self._downloads.connect("download-failed", self._on_dl_failed)
+        return self._downloads
+
+    @property
+    def player(self):
+        if self._player is None:
+            self._player = Player()
+        return self._player
+
+    @property
+    def playback(self):
+        if self._playback is None:
+            self._playback = Playback(self, self.player)
+        return self._playback
 
     # ---------- paths/settings ----------
     def _download_dir(self):
@@ -52,7 +81,8 @@ class PostcastApplication(Adw.Application, GObject.Object):
         import pathlib
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
         self.db.set_setting("download_dir", str(path))
-        self.downloads.directory = pathlib.Path(path)
+        if self._downloads is not None:
+            self._downloads.directory = pathlib.Path(path)
 
     # ---------- lifecycle ----------
     def do_activate(self):

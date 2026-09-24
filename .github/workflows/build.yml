@@ -42,9 +42,9 @@ jobs:
           cp data/io.postcast.Postcast.svg /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.desktop /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.metainfo.xml /tmp/pmaports/testing/postcast/
-          tar -C postcast -czf /tmp/pmaports/testing/postcast/postcast-0.1.0.tar.gz \
-            --transform "s|^|postcast-0.1.0/|" . 2>/dev/null || \
-            tar -C . -czf /tmp/pmaports/testing/postcast/postcast-0.1.0.tar.gz postcast-0.1.0
+          tar -C postcast -czf /tmp/pmaports/testing/postcast/postcast-0.1.1.tar.gz \
+            --transform "s|^|postcast-0.1.1/|" . 2>/dev/null || \
+            tar -C . -czf /tmp/pmaports/testing/postcast/postcast-0.1.1.tar.gz postcast-0.1.1
 
       - name: Set up ssh/gnupg for apk signing
         run: |

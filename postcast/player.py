@@ -3,8 +3,6 @@ import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst, GLib
 
-Gst.init(None)
-
 
 class Player:
     """Thin GStreamer playback wrapper running on the GLib main loop."""
@@ -14,6 +12,7 @@ class Player:
     STATE_STOPPED = "stopped"
 
     def __init__(self):
+        Gst.init(None)
         self.playbin = Gst.ElementFactory.make("playbin", "player")
         self._bus = self.playbin.get_bus()
         self._bus.add_signal_watch()

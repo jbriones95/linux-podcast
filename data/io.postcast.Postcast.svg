@@ -4,17 +4,32 @@
       <stop offset="0%" stop-color="#4a86e8"/>
       <stop offset="100%" stop-color="#2755c4"/>
     </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
-  <!-- headset outline -->
+  <rect width="128" height="128" rx="28" fill="url(#bg)" filter="url(#shadow)"/>
   <g fill="#ffffff">
-    <!-- band -->
-    <path d="M 26 68 a 38 38 0 0 1 76 0 l 0 6 a 8 8 0 0 0 -9 8 -11 11 0 0 0 -11 -8 8 8 0 0 0 -8 8
-             l 0 6 a 8 8 0 0 0 16 2 h 24 v -6 a 46 46 0 0 0 -92 0 v 6 h 24 a 8 8 0 0 0 16 -2 l0 -6
-             a 8 8 0 0 0 -8 -8 -11 11 0 0 0 -11 8 8 8 0 0 0 -9 -8 z"/>
-    <!-- mic stem -->
-    <rect x="66" y="86" width="6" height="14" rx="3"/>
-    <!-- play triangle -->
-    <path d="M 58 44 L 58 60 L 70 52 Z"/>
+    <!-- Microphone body -->
+    <path d="M44 32
+           a16 16 0 0 1 16 16
+           v40
+           a16 16 0 0 1 -32 0
+           V48
+           a16 16 0 0 1 16 -16
+           z"/>
+    <!-- Microphone grille lines -->
+    <g stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" opacity="0.7">
+      <line x1="52" y1="40" x2="76" y2="40"/>
+      <line x1="52" y1="52" x2="76" y2="52"/>
+      <line x1="52" y1="64" x2="76" y2="64"/>
+    </g>
+    <!-- Microphone stand -->
+    <path d="M48 88 h32 M64 88 v20 M52 108 h24" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <!-- Sound wave arcs (broadcast) -->
+    <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.9">
+      <path d="M88 56 a30 30 0 0 1 0 16"/>
+      <path d="M94 50 a40 40 0 0 1 0 28"/>
+    </g>
   </g>
 </svg>

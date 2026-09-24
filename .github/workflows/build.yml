@@ -52,9 +52,9 @@ jobs:
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
-          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
+          # Answer init prompts: Channel(enter), Vendor(oneplus), Device(fajita), then defaults
+          printf '\n\noneplus\nfajita\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
           pmbootstrap config aports /tmp/pmaports
-          pmbootstrap config device oneplus-fajita
           pmbootstrap --version
 
       - name: Build postcast apk

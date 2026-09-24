@@ -17,10 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m venv /tmp/pmbvenv
-          # shellcheck disable=SC1091
           source /tmp/pmbvenv/bin/activate
-          # pmbootstrap is NOT on PyPI ("from versions: none"); it lives on
-          # postmarketOS's own GitLab. Clone it and install from source.
           git clone -q --depth 1 \
             https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git \
             /tmp/pmbootstrap
@@ -28,14 +25,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq git python3-pip patch pkgconf openssl \
             rsync sudo qemu-user qemu-user-static binfmt-support
-          echo "export PATH=/tmp/pmbvenv/bin:\$PATH" >> "$GITHUB_ENV"
+          echo "export PATH=/tmp/pmbvenv/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Clone pmaports (pmbootstrap wants a real aports dir)
         run: |
           set -euo pipefail
           git clone -q --depth 1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git /tmp/pmaports
-          # our APKBUILD + source tarball live in the repo; put them under
-          # testing/postcast in the pmaports tree and let pmbootstrap checksum it
           cp -r postcast /tmp/pmaports/testing/
           mkdir -p /tmp/pmaports/testing/postcast
           cp APKBUILD /tmp/pmaports/testing/postcast/APKBUILD
@@ -51,13 +46,12 @@ jobs:
           mkdir -p ~/.ssh ~/.gnupg
           chmod 700 ~/.ssh ~/.gnupg
 
-- name: pmbootstrap init (non-interactive, aarch64, our own pmaports)
+      - name: pmbootstrap init (non-interactive, aarch64, our own pmaports)
         env:
           DEVICE: oneplus-fajita
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
-          # Let pmbootstrap init generate config with defaults, then configure our settings
           printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
           pmbootstrap config aports /tmp/pmaports
           pmbootstrap config device oneplus-fajita
@@ -71,7 +65,6 @@ jobs:
           cd /tmp/pmaports/testing/postcast
           pmbootstrap --aports /tmp/pmaports checksum postcast
           pmbootstrap --aports /tmp/pmaports build postcast
-          # pmbootstrap may refuse to rebuild an unchanged version; force it
           pmbootstrap --aports /tmp/pmaports build postcast --force || true
 
       - name: Locate and upload artifact

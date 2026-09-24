@@ -37,9 +37,8 @@ jobs:
           cp data/io.postcast.Postcast.svg /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.desktop /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.metainfo.xml /tmp/pmaports/testing/postcast/
-          tar -C postcast -czf /tmp/pmaports/testing/postcast/postcast-0.1.2.tar.gz \
-            --transform "s|^|postcast-0.1.2/|" . 2>/dev/null || \
-            tar -C . -czf /tmp/pmaports/testing/postcast/postcast-0.1.2.tar.gz postcast-0.1.2
+          tar -czf /tmp/pmaports/testing/postcast/postcast-0.1.2.tar.gz \
+            --transform "s|^postcast/|postcast-0.1.2/|" postcast
 
       - name: Set up ssh/gnupg for apk signing
         run: |
@@ -67,7 +66,11 @@ jobs:
           source /tmp/pmbvenv/bin/activate
           cd /tmp/pmaports/testing/postcast
           pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork checksum postcast
-          pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork build --arch aarch64 --force postcast
+          if ! pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork build --arch aarch64 --force postcast; then
+            echo "===== pmbootstrap build log ====="
+            pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork log || true
+            exit 1
+          fi
 
       - name: Locate and upload artifact
         uses: actions/upload-artifact@v4

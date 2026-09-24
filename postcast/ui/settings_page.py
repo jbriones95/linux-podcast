@@ -23,14 +23,18 @@ class SettingsPage(Adw.NavigationPage):
         pref = Adw.PreferencesPage.new()
         pref.set_margin_top(16)
 
-        # --- downloads group ---
+        # --- storage group ---
         group = Adw.PreferencesGroup()
-        group.set_title("Downloads")
+        group.set_title("Storage")
+        group.set_description("Manage where downloaded episodes are stored.")
 
         self._dir_row = Adw.ActionRow()
         self._dir_row.set_title("Download folder")
         self._dir_row.set_subtitle(str(self.app._download_dir()))
         open_btn = Gtk.Button(label="Open")
+        open_btn.add_css_class("flat")
+        open_btn.set_valign(Gtk.Align.CENTER)
+        open_btn.set_tooltip_text("Open download folder")
         open_btn.connect("clicked", self._open_dir)
         self._dir_row.add_suffix(open_btn)
         group.add(self._dir_row)
@@ -40,6 +44,7 @@ class SettingsPage(Adw.NavigationPage):
         clear_btn_row.set_subtitle("Delete all downloaded episode files")
         clear_btn = Gtk.Button(label="Clear")
         clear_btn.add_css_class("destructive-action")
+        clear_btn.set_valign(Gtk.Align.CENTER)
         clear_btn.connect("clicked", self._clear_downloads)
         clear_btn_row.add_suffix(clear_btn)
         group.add(clear_btn_row)
@@ -48,12 +53,15 @@ class SettingsPage(Adw.NavigationPage):
 
         # --- about group ---
         about = Adw.PreferencesGroup()
-        about.set_title("About")
+        about.set_title("About Postcast")
+        about.set_description("A simple podcast player for mobile Linux.")
 
         about_btn_row = Adw.ActionRow()
-        about_btn_row.set_title("About Postcast")
-        about_btn_row.set_subtitle(f"Version {APP_VERSION}")
+        about_btn_row.set_title("Postcast")
+        about_btn_row.set_subtitle(f"Version {APP_VERSION} · GPL-3.0-or-later")
         about_row = Gtk.Button(label="About")
+        about_row.add_css_class("flat")
+        about_row.set_valign(Gtk.Align.CENTER)
         about_row.connect("clicked", self._show_about)
         about_btn_row.add_suffix(about_row)
         about.add(about_btn_row)

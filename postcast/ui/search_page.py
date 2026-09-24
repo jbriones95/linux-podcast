@@ -109,7 +109,9 @@ class SearchPage(Adw.NavigationPage):
             sub_btn.add_css_class("suggested-action")
             sub_btn.connect(
                 "clicked",
-                lambda *_, row=row, url=item["feed_url"]: self._subscribe(row, url),
+                lambda *_, row=row, url=item["feed_url"], button=sub_btn: self._subscribe(
+                    row, url, button
+                ),
             )
             box.append(sub_btn)
 
@@ -122,16 +124,18 @@ class SearchPage(Adw.NavigationPage):
                 image.set_from_paintable(texture)
         return cb
 
-    def _subscribe(self, row, feed_url):
+    def _subscribe(self, row, feed_url, button):
+        button.set_sensitive(False)
+        button.set_label("Subscribing…")
+
         def done(podcast_id, err):
             if err:
+                button.set_sensitive(True)
+                button.set_label("Try again")
                 self.window.toast(f"Could not subscribe: {err.get('error','')}")
                 return
-            # mark the row subscribed
-            box = row.get_child()
-            last = box.get_last_child()
-            if isinstance(last, Gtk.Button):
-                last.set_sensitive(False)
-                last.set_label("Subscribed ✓")
+            button.set_label("Subscribed")
+            button.remove_css_class("suggested-action")
+            button.add_css_class("success")
 
         self.window._subscribe(feed_url, done)

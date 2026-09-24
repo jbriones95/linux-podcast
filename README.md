@@ -4,6 +4,12 @@ A GTK4 podcast player for [postmarketOS](https://postmarketos.org) and other mob
 
 Built with Python + GObject/Gtk, Libadwaita, and GStreamer.
 
+## Screenshots
+
+![Postcast library](screenshots/library.png)
+
+![Podcast detail](screenshots/podcast-detail.png)
+
 ## Features
 
 - Subscribe to podcasts by RSS/Atom feed URL

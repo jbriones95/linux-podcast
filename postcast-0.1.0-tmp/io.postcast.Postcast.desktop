@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Postcast
+GenericName=Podcast Player
+Comment=Subscribe to and play podcasts on postmarketOS
+Exec=postcast
+Icon=io.postcast.Postcast
+Terminal=false
+Categories=Audio;AudioVideo;Player;
+Keywords=Podcast;Audio;Playback;Subscription;
+StartupNotify=true
+StartupWMClass=io.postcast.Postcast

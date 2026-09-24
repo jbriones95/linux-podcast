@@ -1,5 +1,14 @@
 from pathlib import Path
 
+import gi
+
+gi.require_version("Adw", "1")
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gio", "2.0")
+import gi
+
+gi.require_version("Adw", "1")
+gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, Gtk
 
 from ..config import APP_VERSION

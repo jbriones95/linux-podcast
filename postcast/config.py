@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 APP_ID = "io.postcast.Postcast"
+APP_NAME = "Postcast"
 APP_DISPLAY_NAME = "Postcast"
 APP_VERSION = "0.1.0"
 USER_AGENT = "Postcast/0.1 (postmarketOS; +https://github.com/jbriones)"

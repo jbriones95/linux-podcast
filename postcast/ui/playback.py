@@ -1,4 +1,9 @@
-from .player import Player
+import gi
+
+gi.require_version("Gst", "1.0")
+from gi.repository import Gst
+
+from ..player import Player
 
 
 class Playback:

@@ -1,6 +1,9 @@
-from gi.repository import Gio, GLib, Adw, GObject
+import gi
 
-from .config import APP_ID, APP_NAME
+gi.require_version("Adw", "1")
+from gi.repository import Adw, Gio, GLib, GObject
+
+from .config import APP_ID, APP_NAME, data_dir
 from .database import Database
 from .downloader import DownloadManager
 from .artwork import ArtworkCache

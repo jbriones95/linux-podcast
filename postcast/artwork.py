@@ -8,7 +8,6 @@ import gi
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, GLib
-
 from .config import USER_AGENT, artwork_cache_dir
 
 

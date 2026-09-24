@@ -53,7 +53,11 @@ jobs:
           # The package build does not need a device-specific init. Generate the
           # current v3 config with safe defaults, then select the target arch at
           # build time below.
+          set +o pipefail
           yes '' | pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork init
+          init_status=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$init_status" -eq 0
           pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork config aports /tmp/pmaports
           pmbootstrap --version
 

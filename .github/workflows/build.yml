@@ -71,7 +71,10 @@ jobs:
           work = /tmp/pmbwork
           user = user
           CFG
-          # pmbootstrap init will prompt; answer with defaults
+          # Configure device/arch explicitly before init
+          pmbootstrap config device oneplus-fajita
+          pmbootstrap config arch aarch64
+          # Non-interactive init
           printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
           pmbootstrap --version
 

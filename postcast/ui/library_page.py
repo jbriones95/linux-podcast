@@ -1,0 +1,140 @@
+import threading
+
+from gi.repository import Adw, Gtk, GLib
+
+from ..feed import fetch_feed
+
+
+class LibraryPage(Adw.NavigationPage):
+    def __init__(self, window):
+        super().__init__(title="Postcast")
+        self.window = window
+        self.app = window.app
+
+        toolbar = Adw.ToolbarView.new()
+        header = Adw.HeaderBar.new()
+        toolbar.add_top_bar(header)
+
+        # toolbar buttons
+        search_btn = Gtk.Button(icon_name="system-search-symbolic")
+        search_btn.set_tooltip_text("Search for podcasts")
+        search_btn.connect("clicked", lambda *_: window.open_search())
+        header.pack_end(search_btn)
+
+        refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
+        refresh_btn.set_tooltip_text("Refresh all feeds")
+        refresh_btn.connect("clicked", lambda *_: self._refresh_all())
+        header.pack_end(refresh_btn)
+
+        add_btn = Gtk.Button(icon_name="list-add-symbolic")
+        add_btn.set_tooltip_text("Add podcast by URL")
+        add_btn.connect("clicked", lambda *_: window.add_dialog())
+        header.pack_end(add_btn)
+
+        settings_btn = Gtk.Button(icon_name="open-menu-symbolic")
+        settings_btn.set_tooltip_text("Settings")
+        settings_btn.connect("clicked", lambda *_: window.open_settings())
+        header.pack_start(settings_btn)
+
+        self._listbox = Gtk.ListBox()
+        self._listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._listbox.connect("row-activated", self._on_row_activated)
+        self._listbox.set_vexpand(True)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_child(self._listbox)
+        scroll.set_vexpand(True)
+
+        self._status = Adw.StatusPage.new()
+        self._status.set_icon_name("audio-x-generic-symbolic")
+        self._status.set_title("No podcasts yet")
+        self._status.set_description(
+            "Search for podcasts or add one by its RSS feed URL."
+        )
+        find_btn = Gtk.Button(label="Find podcasts")
+        find_btn.add_css_class("suggested-action")
+        find_btn.connect("clicked", lambda *_: window.open_search())
+        self._status.set_child(find_btn)
+
+        stack = Gtk.Stack(vexpand=True)
+        stack.add_named(self._status, "empty")
+        stack.add_named(scroll, "list")
+        self._stack = stack
+
+        toolbar.set_content(stack)
+        self.set_child(toolbar)
+        self.refresh()
+
+    # ---------- UI ----------
+    def refresh(self):
+        podcasts = self.app.db.podcasts()
+        while (row := self._listbox.get_first_child()) is not None:
+            self._listbox.remove(row)
+
+        if not podcasts:
+            self._stack.set_visible_child_name("empty")
+            return
+        self._stack.set_visible_child_name("list")
+
+        for pod in podcasts:
+            row = Gtk.ListBoxRow()
+            row.podcast = pod
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            box.set_margin_top(8)
+            box.set_margin_bottom(8)
+            box.set_margin_start(8)
+            box.set_margin_end(8)
+
+            art = Gtk.Image(icon_name="audio-x-generic-symbolic", pixel_size=48)
+            art.set_size_request(48, 48)
+            self.app.artwork.load(pod.image_url, 96, self._art_cb(art))
+            box.append(art)
+
+            text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            title = Gtk.Label(label=pod.title)
+            title.set_ellipsize(True)
+            title.set_xalign(0)
+            title.add_css_class("title-2")
+            sub = Gtk.Label(label=pod.author or f"{pod.episode_count} episodes")
+            sub.set_ellipsize(True)
+            sub.set_xalign(0)
+            sub.add_css_class("dim-label")
+            text.append(title)
+            text.append(sub)
+            text.set_hexpand(True)
+            box.append(text)
+
+            row.set_child(box)
+            self._listbox.append(row)
+
+    def _art_cb(self, image):
+        def cb(texture):
+            if texture is not None:
+                image.set_from_paintable(texture)
+        return cb
+
+    def _on_row_activated(self, listbox, row):
+        self.window.open_podcast(row.podcast.id)
+
+    def _refresh_all(self):
+        podcasts = self.app.db.podcasts()
+        if not podcasts:
+            self.window.toast("No feeds to refresh yet.")
+            return
+
+        def work():
+            for pod in podcasts:
+                try:
+                    data, episodes = fetch_feed(pod.feed_url)
+                    self.app.db.upsert_podcast(data)
+                    self.app.db.sync_episodes(pod.id, episodes)
+                except Exception:
+                    continue
+            GLib.idle_add(self._all_done)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _all_done(self):
+        self.app.refresh_library()
+        self.refresh()
+        self.window.toast("All feeds refreshed.")

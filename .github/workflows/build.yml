@@ -72,18 +72,18 @@ jobs:
           user = user
           CFG
           # pmbootstrap init will prompt; answer with defaults
-          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | python3 -m pmbootstrap init || true
-          python3 -m pmbootstrap --version
+          printf '\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
+          pmbootstrap --version
 
       - name: Build postcast apk
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
           cd /tmp/pmaports/testing/postcast
-          python3 -m pmbootstrap checksum postcast
-          python3 -m pmbootstrap build postcast
+          pmbootstrap checksum postcast
+          pmbootstrap build postcast
           # pmbootstrap may refuse to rebuild an unchanged version; force it
-          python3 -m pmbootstrap build postcast --force || true
+          pmbootstrap build postcast --force || true
 
       - name: Locate and upload artifact
         uses: actions/upload-artifact@v4

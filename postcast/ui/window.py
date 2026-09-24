@@ -117,6 +117,14 @@ class MainWindow(Adw.ApplicationWindow):
                     on_done,
                 )
                 return
+            except Exception as exc:
+                GLib.idle_add(
+                    self._subscribe_done,
+                    None,
+                    {"feed_url": feed_url, "error": f"Could not read feed: {exc}"},
+                    on_done,
+                )
+                return
             podcast_id = self.app.db.upsert_podcast(podcast)
             self.app.db.sync_episodes(podcast_id, episodes)
             GLib.idle_add(self._subscribe_done, podcast_id, None, on_done)

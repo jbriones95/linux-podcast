@@ -45,11 +45,13 @@ class PlayerBar(Gtk.Box):
 
         self._btn_play = Gtk.Button()
         self._btn_play.set_icon_name("media-playback-start-symbolic")
+        self._btn_play.set_tooltip_text("Play")
         self._btn_play.add_css_class("flat")
         self._btn_play.connect("clicked", self._on_play_clicked)
 
         self._btn_next = Gtk.Button()
         self._btn_next.set_icon_name("go-next-symbolic")
+        self._btn_next.set_tooltip_text("Play next")
         self._btn_next.add_css_class("flat")
         self._btn_next.connect("clicked", lambda *_: self.window.play_next())
 
@@ -77,6 +79,7 @@ class PlayerBar(Gtk.Box):
         self.title_label.set_text(episode.title or "Unknown episode")
         self.set_visible(True)
         self._btn_play.set_icon_name("media-playback-pause-symbolic")
+        self._btn_play.set_tooltip_text("Pause")
         self.app.artwork.load(podcast.image_url, 80, self._set_artwork)
         self.app.playback.set_source(podcast, episode)
 
@@ -104,12 +107,15 @@ class PlayerBar(Gtk.Box):
         self.time_label.set_text(f"{self._fmt(pos_sec)} / {self._fmt(dur_sec)}")
 
     def on_state_changed(self, state):
+        playing = state == "playing"
         self._btn_play.set_icon_name(
-            "media-playback-pause-symbolic" if state == "playing" else "media-playback-start-symbolic"
+            "media-playback-pause-symbolic" if playing else "media-playback-start-symbolic"
         )
+        self._btn_play.set_tooltip_text("Pause" if playing else "Play")
 
     def on_finished(self):
         self._btn_play.set_icon_name("media-playback-start-symbolic")
+        self._btn_play.set_tooltip_text("Play")
 
     # ---- interactions ----
     def _on_play_clicked(self, btn):

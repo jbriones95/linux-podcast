@@ -2,7 +2,7 @@ import gi
 
 gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk, Pango
 
 from .episode_row import EpisodeRow
 
@@ -24,6 +24,7 @@ class PodcastPage(Adw.NavigationPage):
         toolbar.add_top_bar(header)
 
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
+        refresh_btn.set_tooltip_text("Refresh feed")
         refresh_btn.connect("clicked", lambda *_: window.refresh_feed(self.podcast_id))
         header.pack_end(refresh_btn)
 

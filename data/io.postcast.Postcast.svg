@@ -1,35 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#4a86e8"/>
-      <stop offset="100%" stop-color="#2755c4"/>
+    <linearGradient id="background" x1="16" y1="12" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b9bf4"/>
+      <stop offset="1" stop-color="#2755c4"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
-    </filter>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg)" filter="url(#shadow)"/>
-  <g fill="#ffffff">
-    <!-- Microphone body -->
-    <path d="M44 32
-           a16 16 0 0 1 16 16
-           v40
-           a16 16 0 0 1 -32 0
-           V48
-           a16 16 0 0 1 16 -16
-           z"/>
-    <!-- Microphone grille lines -->
-    <g stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" opacity="0.7">
-      <line x1="52" y1="40" x2="76" y2="40"/>
-      <line x1="52" y1="52" x2="76" y2="52"/>
-      <line x1="52" y1="64" x2="76" y2="64"/>
-    </g>
-    <!-- Microphone stand -->
-    <path d="M48 88 h32 M64 88 v20 M52 108 h24" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none"/>
-    <!-- Sound wave arcs (broadcast) -->
-    <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.9">
-      <path d="M88 56 a30 30 0 0 1 0 16"/>
-      <path d="M94 50 a40 40 0 0 1 0 28"/>
-    </g>
+
+  <rect width="128" height="128" rx="28" fill="url(#background)"/>
+
+  <!-- Centered microphone -->
+  <rect x="48" y="25" width="32" height="59" rx="16" fill="#ffffff"/>
+  <path d="M39 62a25 25 0 0 0 50 0" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+  <path d="M64 87v17M52 104h24" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- Microphone grille -->
+  <g stroke="#3b70d8" stroke-width="2" stroke-linecap="round" opacity="0.8">
+    <path d="M56 39h16M56 50h16M56 61h16"/>
+  </g>
+
+  <!-- Symmetrical broadcast waves -->
+  <g fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.92">
+    <path d="M31 51a36 36 0 0 0 0 22"/>
+    <path d="M23 43a48 48 0 0 0 0 38"/>
+    <path d="M97 51a36 36 0 0 1 0 22"/>
+    <path d="M105 43a48 48 0 0 1 0 38"/>
   </g>
 </svg>

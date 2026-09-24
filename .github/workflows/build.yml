@@ -37,9 +37,9 @@ jobs:
           cp data/io.postcast.Postcast.svg /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.desktop /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.metainfo.xml /tmp/pmaports/testing/postcast/
-          tar -C postcast -czf /tmp/pmaports/testing/postcast/postcast-0.1.1.tar.gz \
-            --transform "s|^|postcast-0.1.1/|" . 2>/dev/null || \
-            tar -C . -czf /tmp/pmaports/testing/postcast/postcast-0.1.1.tar.gz postcast-0.1.1
+          tar -C postcast -czf /tmp/pmaports/testing/postcast/postcast-0.1.2.tar.gz \
+            --transform "s|^|postcast-0.1.2/|" . 2>/dev/null || \
+            tar -C . -czf /tmp/pmaports/testing/postcast/postcast-0.1.2.tar.gz postcast-0.1.2
 
       - name: Set up ssh/gnupg for apk signing
         run: |
@@ -47,14 +47,14 @@ jobs:
           chmod 700 ~/.ssh ~/.gnupg
 
       - name: pmbootstrap init (non-interactive, aarch64, our own pmaports)
-        env:
-          DEVICE: oneplus-fajita
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
-          # Answer init prompts: Channel(enter), Vendor(oneplus), Device(fajita), then defaults
-          printf '\n\noneplus\nfajita\n\n\n\n\n\n\n\n\n\n\n' | pmbootstrap init || true
-          pmbootstrap config aports /tmp/pmaports
+          # The package build does not need a device-specific init. Generate the
+          # current v3 config with safe defaults, then select the target arch at
+          # build time below.
+          yes '' | pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork init
+          pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork config aports /tmp/pmaports
           pmbootstrap --version
 
       - name: Build postcast apk
@@ -62,9 +62,8 @@ jobs:
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
           cd /tmp/pmaports/testing/postcast
-          pmbootstrap --aports /tmp/pmaports checksum postcast
-          pmbootstrap --aports /tmp/pmaports build postcast
-          pmbootstrap --aports /tmp/pmaports build postcast --force || true
+          pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork checksum postcast
+          pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork build --arch aarch64 --force postcast
 
       - name: Locate and upload artifact
         uses: actions/upload-artifact@v4

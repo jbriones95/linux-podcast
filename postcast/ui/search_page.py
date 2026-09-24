@@ -2,7 +2,7 @@ import gi
 
 gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk, Pango
 
 
 class SearchPage(Adw.NavigationPage):
@@ -10,6 +10,7 @@ class SearchPage(Adw.NavigationPage):
         super().__init__(title="Search")
         self.window = window
         self.app = window.app
+        self._search_generation = 0
 
         toolbar = Adw.ToolbarView.new()
         header = Adw.HeaderBar.new()
@@ -45,11 +46,15 @@ class SearchPage(Adw.NavigationPage):
     # ---------- actions ----------
     def _on_search(self, *args):
         term = self.entry.get_text().strip()
+        self._search_generation += 1
+        generation = self._search_generation
         if not term:
             self._stack.set_visible_child_name("empty")
             return
 
         def on_results(results):
+            if generation != self._search_generation:
+                return
             if isinstance(results, Exception):
                 self.window.toast(f"Search failed: {results}")
                 return
@@ -100,8 +105,12 @@ class SearchPage(Adw.NavigationPage):
             box.append(text)
 
             sub_btn = Gtk.Button(label="Subscribe")
+            sub_btn.set_tooltip_text("Subscribe to this podcast")
             sub_btn.add_css_class("suggested-action")
-            sub_btn.connect("clicked", lambda *_, url=item["feed_url"]: self._subscribe(row, url))
+            sub_btn.connect(
+                "clicked",
+                lambda *_, row=row, url=item["feed_url"]: self._subscribe(row, url),
+            )
             box.append(sub_btn)
 
             row.set_child(box)

@@ -67,6 +67,7 @@ class EpisodeRow(Gtk.ListBoxRow):
         # download button
         self.download_btn = Gtk.Button()
         self.download_btn.set_icon_name("folder-download-symbolic")
+        self.download_btn.set_tooltip_text("Download")
         self.download_btn.add_css_class("flat")
         self.download_btn.set_valign(Gtk.Align.CENTER)
         self.download_btn.connect("clicked", self._on_download)
@@ -75,6 +76,7 @@ class EpisodeRow(Gtk.ListBoxRow):
         # play button
         self.play_btn = Gtk.Button()
         self.play_btn.set_icon_name("media-playback-start-symbolic")
+        self.play_btn.set_tooltip_text("Play")
         self.play_btn.add_css_class("flat")
         self.play_btn.set_valign(Gtk.Align.CENTER)
         self.play_btn.connect("clicked", self._on_play)

@@ -46,7 +46,12 @@ class MainWindow(Adw.ApplicationWindow):
         self.app.connect("library-changed", self._on_library_changed)
         self.app.connect("now-playing", self._on_now_playing)
 
-        self.set_default_size(420, 760)
+        # OnePlus 6T portrait is 1080x2340 (2.17:1); phosh presents it at
+        # roughly 412x915 logical pixels. Keep the desktop preview portrait
+        # sized while allowing the compositor to maximize it on-device.
+        self.set_default_size(412, 915)
+        self.set_size_request(360, 640)
+        self.set_resizable(True)
 
     # ---------- public helpers ----------
     def toast(self, message):

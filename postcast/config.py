@@ -4,8 +4,8 @@ from pathlib import Path
 APP_ID = "io.postcast.Postcast"
 APP_NAME = "Postcast"
 APP_DISPLAY_NAME = "Postcast"
-APP_VERSION = "0.1.6"
-USER_AGENT = "Postcast/0.1.6 (postmarketOS; +https://github.com/jbriones)"
+APP_VERSION = "0.1.7"
+USER_AGENT = "Postcast/0.1.7 (postmarketOS; +https://github.com/jbriones)"
 
 def data_dir() -> Path:
     base = os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))

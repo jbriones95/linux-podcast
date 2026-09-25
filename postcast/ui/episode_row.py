@@ -34,18 +34,22 @@ class EpisodeRow(Gtk.ListBoxRow):
         self.episode = episode
         self.podcast = podcast
 
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.set_margin_start(12)
         box.set_margin_end(8)
-        box.set_margin_top(6)
-        box.set_margin_bottom(6)
+        box.set_margin_top(8)
+        box.set_margin_bottom(8)
+
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
         # text side
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         text_box.set_hexpand(True)
 
         self.title = Gtk.Label(label=episode.title or "Untitled")
+        self.title.set_wrap(True)
         self.title.set_ellipsize(Pango.EllipsizeMode.END)
+        self.title.set_lines(2)
         self.title.set_xalign(0)
         self.title.add_css_class("title-2")
 
@@ -62,25 +66,25 @@ class EpisodeRow(Gtk.ListBoxRow):
         text_box.append(self.title)
         text_box.append(self.meta)
         text_box.append(self.state)
-        box.append(text_box)
+        top.append(text_box)
 
         self.favorite_btn = Gtk.Button()
         self.favorite_btn.add_css_class("flat")
         self.favorite_btn.set_valign(Gtk.Align.CENTER)
         self.favorite_btn.connect("clicked", self._on_favorite)
-        box.append(self.favorite_btn)
+        self.favorite_btn.set_size_request(44, 44)
 
         self.played_btn = Gtk.Button()
         self.played_btn.add_css_class("flat")
         self.played_btn.set_valign(Gtk.Align.CENTER)
         self.played_btn.connect("clicked", self._on_played)
-        box.append(self.played_btn)
+        self.played_btn.set_size_request(44, 44)
 
         self.queue_btn = Gtk.Button()
         self.queue_btn.add_css_class("flat")
         self.queue_btn.set_valign(Gtk.Align.CENTER)
         self.queue_btn.connect("clicked", self._on_queue)
-        box.append(self.queue_btn)
+        self.queue_btn.set_size_request(44, 44)
 
         # download button
         self.download_btn = Gtk.Button()
@@ -89,7 +93,7 @@ class EpisodeRow(Gtk.ListBoxRow):
         self.download_btn.add_css_class("flat")
         self.download_btn.set_valign(Gtk.Align.CENTER)
         self.download_btn.connect("clicked", self._on_download)
-        box.append(self.download_btn)
+        self.download_btn.set_size_request(44, 44)
 
         # play button
         self.play_btn = Gtk.Button()
@@ -98,7 +102,20 @@ class EpisodeRow(Gtk.ListBoxRow):
         self.play_btn.add_css_class("flat")
         self.play_btn.set_valign(Gtk.Align.CENTER)
         self.play_btn.connect("clicked", self._on_play)
-        box.append(self.play_btn)
+        self.play_btn.set_size_request(44, 44)
+
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        actions.set_halign(Gtk.Align.END)
+        for button in (
+            self.favorite_btn,
+            self.played_btn,
+            self.queue_btn,
+            self.download_btn,
+            self.play_btn,
+        ):
+            actions.append(button)
+        box.append(top)
+        box.append(actions)
 
         self.set_child(box)
         self._downloading = False

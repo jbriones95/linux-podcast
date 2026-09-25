@@ -47,14 +47,15 @@ class PodcastPage(Adw.NavigationPage):
 
     # ---------- header ----------
     def _header_widget(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         box.set_margin_start(16)
         box.set_margin_end(16)
-        box.set_margin_top(16)
+        box.set_margin_top(12)
         box.set_margin_bottom(8)
 
-        self._art = Gtk.Image(icon_name="audio-x-generic-symbolic", pixel_size=96)
-        self._art.set_size_request(96, 96)
+        self._art = Gtk.Image(icon_name="audio-x-generic-symbolic", pixel_size=128)
+        self._art.set_size_request(128, 128)
+        self._art.set_halign(Gtk.Align.CENTER)
         if self.podcast:
             self.app.artwork.load(self.podcast.image_url, 192, self._art_cb)
         box.append(self._art)
@@ -73,7 +74,7 @@ class PodcastPage(Adw.NavigationPage):
         desc = Gtk.Label(label=self.podcast.description if self.podcast else "")
         desc.set_wrap(True)
         desc.set_xalign(0)
-        desc.set_lines(4)
+        desc.set_lines(5)
         desc.set_ellipsize(Pango.EllipsizeMode.END)
 
         unsub_btn = Gtk.Button(label="Unsubscribe")
@@ -83,6 +84,7 @@ class PodcastPage(Adw.NavigationPage):
         text.append(title)
         text.append(author)
         text.append(desc)
+        unsub_btn.set_hexpand(True)
         text.append(unsub_btn)
         text.set_hexpand(True)
         box.append(text)

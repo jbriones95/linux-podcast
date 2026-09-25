@@ -75,7 +75,7 @@ class SearchPage(Adw.NavigationPage):
         self._stack.set_visible_child_name("results")
         for item in results:
             row = Gtk.ListBoxRow()
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             box.set_margin_top(8)
             box.set_margin_bottom(8)
             box.set_margin_start(8)
@@ -84,7 +84,8 @@ class SearchPage(Adw.NavigationPage):
             art = Gtk.Image(icon_name="audio-x-generic-symbolic", pixel_size=48)
             art.set_size_request(48, 48)
             self.app.artwork.load(item["image_url"], 96, self._art_cb(art))
-            box.append(art)
+            top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            top.append(art)
 
             text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             title = Gtk.Label(label=item["title"])
@@ -102,7 +103,8 @@ class SearchPage(Adw.NavigationPage):
             text.append(title)
             text.append(sub)
             text.set_hexpand(True)
-            box.append(text)
+            top.append(text)
+            box.append(top)
 
             sub_btn = Gtk.Button(label="Subscribe")
             sub_btn.set_tooltip_text("Subscribe to this podcast")
@@ -113,6 +115,8 @@ class SearchPage(Adw.NavigationPage):
                     row, url, button
                 ),
             )
+            sub_btn.set_size_request(-1, 44)
+            sub_btn.set_halign(Gtk.Align.END)
             box.append(sub_btn)
 
             row.set_child(box)

@@ -47,12 +47,14 @@ class PlayerBar(Gtk.Box):
         self._btn_play.set_icon_name("media-playback-start-symbolic")
         self._btn_play.set_tooltip_text("Play")
         self._btn_play.add_css_class("flat")
+        self._btn_play.set_size_request(44, 44)
         self._btn_play.connect("clicked", self._on_play_clicked)
 
         self._btn_next = Gtk.Button()
         self._btn_next.set_icon_name("go-next-symbolic")
         self._btn_next.set_tooltip_text("Play next")
         self._btn_next.add_css_class("flat")
+        self._btn_next.set_size_request(44, 44)
         self._btn_next.connect("clicked", lambda *_: self.window.play_next())
 
         title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)

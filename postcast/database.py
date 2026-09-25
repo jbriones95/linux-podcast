@@ -235,18 +235,20 @@ class Database:
                 results.append((episode, podcast))
             return results
 
-    def recent_episodes(self, limit=100):
+    def recent_episodes(self, limit=None):
         """Return newest episodes across all subscribed podcasts."""
         with self._lock:
-            rows = self.conn.execute(
-                """SELECT e.*, p.id AS result_podcast_id,
-                          p.feed_url AS result_feed_url, p.title AS result_podcast_title,
-                          p.author AS result_podcast_author, p.description AS result_podcast_description,
-                          p.image_url AS result_podcast_image_url, p.link AS result_podcast_link
-                   FROM episodes e JOIN podcasts p ON p.id=e.podcast_id
-                   ORDER BY COALESCE(e.published, 0) DESC, e.id DESC LIMIT ?""",
-                (int(limit),),
-            ).fetchall()
+            query = """SELECT e.*, p.id AS result_podcast_id,
+                              p.feed_url AS result_feed_url, p.title AS result_podcast_title,
+                              p.author AS result_podcast_author, p.description AS result_podcast_description,
+                              p.image_url AS result_podcast_image_url, p.link AS result_podcast_link
+                       FROM episodes e JOIN podcasts p ON p.id=e.podcast_id
+                       ORDER BY COALESCE(e.published, 0) DESC, e.id DESC"""
+            params = ()
+            if limit is not None:
+                query += " LIMIT ?"
+                params = (int(limit),)
+            rows = self.conn.execute(query, params).fetchall()
             return self._episode_podcast_results(rows)
 
     @staticmethod

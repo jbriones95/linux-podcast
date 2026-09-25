@@ -33,6 +33,8 @@ class EpisodeRow(Gtk.ListBoxRow):
         self.app = window.app
         self.episode = episode
         self.podcast = podcast
+        self._show_podcast = show_podcast
+        self._artwork_token = object()
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.set_margin_start(12)
@@ -42,6 +44,20 @@ class EpisodeRow(Gtk.ListBoxRow):
 
         top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         top.set_hexpand(True)
+
+        if show_podcast and podcast:
+            artwork = Gtk.Image(icon_name="audio-x-generic-symbolic", pixel_size=64)
+            artwork.set_size_request(64, 64)
+            artwork.set_valign(Gtk.Align.START)
+            top.append(artwork)
+            self._artwork_url = podcast.image_url
+            token = self._artwork_token
+            if self._artwork_url:
+                self.app.artwork.load(
+                    self._artwork_url,
+                    128,
+                    self._artwork_callback(artwork, token, self._artwork_url),
+                )
 
         # text side
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
@@ -128,6 +144,18 @@ class EpisodeRow(Gtk.ListBoxRow):
         self._update_play_icon()
         self._update_state_icons()
         self._update_queue_icon()
+
+    def _artwork_callback(self, image, token, url):
+        def callback(texture):
+            if (
+                texture is not None
+                and token is self._artwork_token
+                and url == getattr(self, "_artwork_url", "")
+                and self.get_parent() is not None
+            ):
+                image.set_from_paintable(texture)
+
+        return callback
 
     def rerender(self, episode):
         if episode is None:

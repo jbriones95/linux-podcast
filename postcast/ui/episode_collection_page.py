@@ -52,7 +52,7 @@ class EpisodeCollectionPage(Adw.NavigationPage):
         while (row := self._listbox.get_first_child()) is not None:
             self._listbox.remove(row)
         if self.mode == "new":
-            results = self.app.db.recent_episodes()
+            results = self.app.db.recent_episodes(limit=None)
         else:
             results = self.app.db.search_episodes(favorites_only=True)
         if not results:

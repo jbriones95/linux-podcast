@@ -20,6 +20,7 @@ from ..ui.now_playing_page import NowPlayingPage
 from ..ui.queue_page import QueuePage
 from ..ui.statistics_page import StatisticsPage
 from ..ui.about_page import AboutPage
+from ..ui.episode_collection_page import EpisodeCollectionPage
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -32,10 +33,52 @@ class MainWindow(Adw.ApplicationWindow):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._toast_overlay.set_child(root)
 
-        self.nav = Adw.NavigationView()
         self.library = LibraryPage(self)
-        self.nav.add(self.library)
-        root.append(self.nav)
+        self.new_page = EpisodeCollectionPage(self, "new")
+        self.favorites_page = EpisodeCollectionPage(self, "favorites")
+
+        self._sections = {}
+        self._section_stack = Gtk.Stack(vexpand=True)
+        for name, page in (
+            ("shows", self.library),
+            ("new", self.new_page),
+            ("favorites", self.favorites_page),
+        ):
+            nav = Adw.NavigationView()
+            nav.add(page)
+            self._sections[name] = (nav, page)
+            self._section_stack.add_named(nav, name)
+        self.nav = self._sections["shows"][0]
+        root.append(self._section_stack)
+
+        separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        root.append(separator)
+        self._section_buttons = {}
+        bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        bottom.set_margin_start(6)
+        bottom.set_margin_end(6)
+        bottom.set_margin_top(4)
+        bottom.set_margin_bottom(4)
+        previous = None
+        for name, label, icon in (
+            ("shows", "Shows", "view-list-symbolic"),
+            ("new", "New", "mail-unread-symbolic"),
+            ("favorites", "Favorites", "starred-symbolic"),
+        ):
+            button = Gtk.ToggleButton()
+            button.set_size_request(-1, 60)
+            button.set_hexpand(True)
+            button.set_tooltip_text(label)
+            button.add_css_class("flat")
+            button.set_child(self._section_button_content(icon, label))
+            if previous is not None:
+                button.set_group(previous)
+            button.connect("toggled", self._on_section_toggled, name)
+            self._section_buttons[name] = button
+            bottom.append(button)
+            previous = button
+        self._section_buttons["shows"].set_active(True)
+        root.append(bottom)
 
         from .player_bar import PlayerBar
         self.player_bar = PlayerBar(self)
@@ -78,6 +121,28 @@ class MainWindow(Adw.ApplicationWindow):
 
     def current_page(self):
         return self.nav.get_visible_page()
+
+    @staticmethod
+    def _section_button_content(icon_name, label):
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        content.set_halign(Gtk.Align.CENTER)
+        image = Gtk.Image(icon_name=icon_name)
+        text = Gtk.Label(label=label)
+        text.add_css_class("caption")
+        content.append(image)
+        content.append(text)
+        return content
+
+    def _on_section_toggled(self, button, active, name):
+        if active:
+            self.switch_section(name)
+
+    def switch_section(self, name):
+        nav, page = self._sections[name]
+        nav.pop_to_page(page)
+        self.nav = nav
+        self._section_stack.set_visible_child_name(name)
+        page.refresh()
 
     # ---------- navigation ----------
     def open_podcast(self, podcast_id):
@@ -269,6 +334,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_library_changed(self, app):
         self.library.refresh()
+        self.new_page.refresh()
+        self.favorites_page.refresh()
 
     def _refresh_rows(self):
         page = self.current_page()
@@ -295,6 +362,8 @@ class MainWindow(Adw.ApplicationWindow):
         elif isinstance(page, EpisodePage):
             page.refresh()
         elif isinstance(page, QueuePage):
+            page.refresh()
+        elif isinstance(page, EpisodeCollectionPage):
             page.refresh()
 
     def delete_episode_audio(self, episode_id):

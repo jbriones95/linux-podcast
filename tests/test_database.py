@@ -163,6 +163,28 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(match[1].title, "Show")
             db.close()
 
+    def test_recent_episodes_are_aggregated_across_podcasts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            first = db.upsert_podcast(
+                {"feed_url": "https://example.test/one.xml", "title": "One"}
+            )
+            second = db.upsert_podcast(
+                {"feed_url": "https://example.test/two.xml", "title": "Two"}
+            )
+            db.sync_episodes(
+                first,
+                [{"guid": "old", "title": "Old", "audio_url": "https://example.test/old.mp3", "published": 10}],
+            )
+            db.sync_episodes(
+                second,
+                [{"guid": "new", "title": "New", "audio_url": "https://example.test/new.mp3", "published": 20}],
+            )
+            recent = db.recent_episodes()
+            self.assertEqual([item[0].title for item in recent], ["New", "Old"])
+            self.assertEqual([item[1].title for item in recent], ["Two", "One"])
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

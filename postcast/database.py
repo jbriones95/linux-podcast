@@ -5,6 +5,8 @@ from pathlib import Path
 from .config import db_path
 from .models import Episode, Podcast
 
+SCHEMA_VERSION = 1
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS podcasts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,28 +51,53 @@ class Database:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.execute("PRAGMA journal_mode = WAL")
-        self.conn.executescript(SCHEMA)
-        self.conn.commit()
+        self._migrate()
+
+    def _migrate(self):
+        """Create or upgrade the database without dropping user data."""
+        current = self.conn.execute("PRAGMA user_version").fetchone()[0]
+        if current > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema {current} is newer than supported version "
+                f"{SCHEMA_VERSION}"
+            )
+
+        if current < 1:
+            # CREATE IF NOT EXISTS makes this safe for databases created before
+            # schema versioning was introduced.
+            self.conn.executescript(SCHEMA)
+            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            self.conn.commit()
 
     def close(self):
         with self._lock:
-            self.conn.close()
+            if self.conn is not None:
+                self.conn.close()
+                self.conn = None
 
     # ---- podcasts ----
     def upsert_podcast(self, data: dict) -> int:
         with self._lock:
-            cur = self.conn.execute(
+            values = {
+                "feed_url": data["feed_url"],
+                "title": data.get("title", ""),
+                "author": data.get("author", ""),
+                "description": data.get("description", ""),
+                "image_url": data.get("image_url", ""),
+                "link": data.get("link", ""),
+            }
+            self.conn.execute(
                 """INSERT INTO podcasts (feed_url, title, author, description, image_url, link)
                    VALUES (:feed_url, :title, :author, :description, :image_url, :link)
                    ON CONFLICT(feed_url) DO UPDATE SET
                      title=excluded.title, author=excluded.author,
                      description=excluded.description, image_url=excluded.image_url,
                      link=excluded.link""",
-                data,
+                values,
             )
             self.conn.commit()
             row = self.conn.execute(
-                "SELECT id FROM podcasts WHERE feed_url = ?", (data["feed_url"],)
+                "SELECT id FROM podcasts WHERE feed_url = ?", (values["feed_url"],)
             ).fetchone()
             return row["id"]
 

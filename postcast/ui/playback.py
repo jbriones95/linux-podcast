@@ -46,6 +46,14 @@ class Playback:
     def pause(self):
         self.player.pause()
 
+    def shutdown(self):
+        """Persist the current position before the application exits."""
+        if self.episode:
+            position, _duration = self.player.position()
+            if position > 0:
+                self.db.set_position(self.episode.id, position)
+        self.player.close()
+
     # ---------- queue ----------
     def play_episode(self, podcast, episode, queue=None):
         self.set_source(podcast, episode, queue)

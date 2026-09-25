@@ -92,6 +92,17 @@ class PostcastApplication(Adw.Application, GObject.Object):
         else:
             self.window.present()
 
+    def do_shutdown(self):
+        if self._playback is not None:
+            self._playback.shutdown()
+        elif self._player is not None:
+            self._player.close()
+        if self._downloads is not None:
+            self._downloads.shutdown()
+        if self._db is not None:
+            self._db.close()
+        super().do_shutdown()
+
     # ---------- download toggle ----------
     def download_toggle(self, episode):
         if self.downloads.is_queued_or_active(episode.id):

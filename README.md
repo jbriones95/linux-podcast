@@ -36,6 +36,13 @@ Run from source:
 python3 -m postcast
 ```
 
+Run the test suite:
+
+```sh
+python3 -m pip install feedparser
+python3 -m unittest discover -s tests -v
+```
+
 ## Packaging for postmarketOS
 
 The included `APKBUILD` builds an `apk` for postmarketOS via `pmbootstrap`:

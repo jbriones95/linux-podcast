@@ -64,6 +64,12 @@ class Player:
         self._set_state(self.STATE_STOPPED)
         self._stop_position_timer()
         self._uri = None
+        self._seek_target = None
+
+    def close(self):
+        """Release GStreamer resources during application shutdown."""
+        self.stop()
+        self._bus.remove_signal_watch()
 
     def is_playing(self):
         return self._state == self.STATE_PLAYING

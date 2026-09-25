@@ -1,13 +1,15 @@
 import re
 import threading
-import urllib.error
 import urllib.parse
 import urllib.request
+import logging
 from pathlib import Path
 
 from gi.repository import GLib
 
 from .config import USER_AGENT
+
+logger = logging.getLogger(__name__)
 
 
 class DownloadManager:
@@ -21,11 +23,14 @@ class DownloadManager:
         self._current = None  # episode_id currently downloading
         self._cancel_flags = set()
         self._callbacks = {}
+        self._stop_event = threading.Event()
         self.worker = threading.Thread(target=self._run, daemon=True, name="postcast-download")
         self.worker.start()
 
     # ------- public API (thread-safe) -------
     def enqueue(self, episode_id, audio_url, title, podcast_title, destination_dir=None):
+        if self._stop_event.is_set():
+            return False
         with self._lock:
             self._queue.append({
                 "episode_id": episode_id,
@@ -51,16 +56,26 @@ class DownloadManager:
         with self._lock:
             return self._current
 
+    def shutdown(self, timeout=5):
+        """Stop accepting work and let the worker exit cleanly."""
+        with self._lock:
+            self._cancel_flags.update(item["episode_id"] for item in self._queue)
+            if self._current is not None:
+                self._cancel_flags.add(self._current)
+            self._queue.clear()
+        self._stop_event.set()
+        self.worker.join(timeout=timeout)
+
     # ------- internals -------
     def _run(self):
-        while True:
+        while not self._stop_event.is_set():
             with self._lock:
                 if self._queue:
                     current = self._queue.pop(0)
                 else:
                     current = None
             if current is None:
-                threading.Event().wait(0.2)
+                self._stop_event.wait(0.2)
                 continue
 
             episode_id = current["episode_id"]
@@ -108,7 +123,8 @@ class DownloadManager:
                             )
                 temppath.rename(dest)
             return dest
-        except (urllib.error.URLError, OSError, Exception) as exc:
+        except Exception:
+            logger.exception("Download failed for episode %s", episode_id)
             dest.with_suffix(".part").unlink(missing_ok=True)
             return None
 

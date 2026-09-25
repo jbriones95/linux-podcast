@@ -50,6 +50,13 @@ jobs:
           mkdir -p ~/.ssh ~/.gnupg
           chmod 700 ~/.ssh ~/.gnupg
 
+      - name: Run tests and package checks
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q feedparser
+          python3 -m unittest discover -s tests -v
+          python3 -m compileall -q postcast
+
       - name: pmbootstrap init (non-interactive, aarch64, our own pmaports)
         run: |
           set -euo pipefail

@@ -41,6 +41,7 @@ class EpisodeRow(Gtk.ListBoxRow):
         box.set_margin_bottom(8)
 
         top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        top.set_hexpand(True)
 
         # text side
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
@@ -58,6 +59,8 @@ class EpisodeRow(Gtk.ListBoxRow):
             meta_parts.insert(0, podcast.title or "Unknown show")
         self.meta = Gtk.Label(label=" · ".join(meta_parts))
         self.meta.set_xalign(0)
+        self.meta.set_ellipsize(Pango.EllipsizeMode.END)
+        self.meta.set_max_width_chars(42)
         self.meta.add_css_class("dim-label")
 
         self.state = Gtk.Label(label="")

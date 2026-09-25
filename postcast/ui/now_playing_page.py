@@ -129,7 +129,7 @@ class NowPlayingPage(Adw.NavigationPage):
 
         description = Gtk.Label(label=self.episode.description if self.episode else "")
         description.set_wrap(True)
-        description.set_selectable(True)
+        description.set_selectable(False)
         description.set_xalign(0)
         description.set_ellipsize(Pango.EllipsizeMode.NONE)
         content.append(description)

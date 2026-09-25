@@ -30,17 +30,19 @@ class PodcastPage(Adw.NavigationPage):
 
         self._listbox = Gtk.ListBox()
         self._listbox.set_selection_mode(Gtk.SelectionMode.NONE)
-        self._listbox.set_vexpand(True)
         self._listbox.connect("row-activated", self._on_row_activated)
-
-        scroll = Gtk.ScrolledWindow(vexpand=True)
-        scroll.set_child(self._listbox)
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         content.append(self._header_widget())
-        content.append(scroll)
+        content.append(self._listbox)
 
-        toolbar.set_content(content)
+        # Use one touch scroller for artwork, description, and episodes. A
+        # nested scroller made the description feel sticky and caused gesture
+        # handoff/highlight artifacts on the phone.
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        scroll.set_child(content)
+
+        toolbar.set_content(scroll)
         self.set_child(toolbar)
         self._rows = {}
         self.rebuild()
@@ -74,8 +76,7 @@ class PodcastPage(Adw.NavigationPage):
         desc = Gtk.Label(label=self.podcast.description if self.podcast else "")
         desc.set_wrap(True)
         desc.set_xalign(0)
-        desc.set_lines(5)
-        desc.set_ellipsize(Pango.EllipsizeMode.END)
+        desc.set_selectable(False)
 
         unsub_btn = Gtk.Button(label="Unsubscribe")
         unsub_btn.add_css_class("destructive-action")

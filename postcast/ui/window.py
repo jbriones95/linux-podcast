@@ -8,6 +8,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gtk, GLib
 
 from ..feed import FeedError, fetch_feed
+from ..interop import import_opml
 from ..search import search_podcasts
 from ..ui.library_page import LibraryPage
 from ..ui.podcast_page import PodcastPage
@@ -16,6 +17,7 @@ from ..ui.settings_page import SettingsPage
 from ..ui.episode_page import EpisodePage
 from ..ui.now_playing_page import NowPlayingPage
 from ..ui.queue_page import QueuePage
+from ..ui.statistics_page import StatisticsPage
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -87,6 +89,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def open_queue(self):
         self.nav.push(QueuePage(self))
+
+    def open_statistics(self):
+        self.nav.push(StatisticsPage(self))
 
     def add_dialog(self):
         entry = Gtk.Entry(placeholder_text="https://…/feed.xml")
@@ -192,6 +197,32 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.idle_add(on_results, results)
 
         threading.Thread(target=work, daemon=True).start()
+
+    def import_opml(self, path):
+        try:
+            urls = import_opml(path)
+        except Exception as exc:
+            self.toast(f"Could not import OPML: {exc}")
+            return
+
+        def work():
+            imported = 0
+            for url in urls:
+                try:
+                    podcast, episodes = fetch_feed(url)
+                    podcast_id = self.app.db.upsert_podcast(podcast)
+                    self.app.db.sync_episodes(podcast_id, episodes)
+                    imported += 1
+                except Exception:
+                    continue
+            GLib.idle_add(self._opml_imported, imported)
+
+        threading.Thread(target=work, daemon=True, name="postcast-opml-import").start()
+
+    def _opml_imported(self, count):
+        self.app.refresh_library()
+        self.library.refresh()
+        self.toast(f"Imported {count} podcast{'s' if count != 1 else ''}.")
 
     # ---------- app signal handlers ----------
     def _on_position(self, app, pos, dur):

@@ -130,6 +130,24 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(db.queue_items(), [])
             db.close()
 
+    def test_listening_statistics_accumulate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            podcast_id = db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show"}
+            )
+            db.sync_episodes(
+                podcast_id,
+                [{"guid": "one", "title": "One", "audio_url": "https://example.test/one.mp3"}],
+            )
+            episode_id = db.episodes(podcast_id)[0].id
+            db.record_listening(episode_id, 30)
+            db.record_listening(episode_id, 15, completed=True)
+            summary = db.listening_summary()
+            self.assertEqual(summary[0]["seconds"], 45)
+            self.assertEqual(summary[0]["completed"], 1)
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

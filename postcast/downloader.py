@@ -1,5 +1,7 @@
 import re
+import shutil
 import threading
+import time
 import urllib.parse
 import urllib.request
 import logging
@@ -98,35 +100,45 @@ class DownloadManager:
                 self._emit("download-failed", episode_id)
 
     def _download(self, episode_id, url, dest):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                total = int(resp.headers.get("Content-Length") or 0)
-                temppath = dest.with_suffix(".part")
-                done = 0
-                with open(temppath, "wb") as fh:
-                    while True:
-                        chunk = resp.read(65536)
-                        if not chunk:
-                            break
-                        if episode_id in self._cancel_flags:
-                            fh.close()
-                            temppath.unlink(missing_ok=True)
-                            return None
-                        fh.write(chunk)
-                        done += len(chunk)
-                        if total:
-                            self._emit(
-                                "download-progress",
-                                episode_id,
-                                done / total if total else 0.0,
-                            )
-                temppath.rename(dest)
-            return dest
-        except Exception:
-            logger.exception("Download failed for episode %s", episode_id)
-            dest.with_suffix(".part").unlink(missing_ok=True)
-            return None
+        temppath = dest.with_suffix(".part")
+        for attempt in range(3):
+            try:
+                start = temppath.stat().st_size if temppath.exists() else 0
+                headers = {"User-Agent": USER_AGENT}
+                if start:
+                    headers["Range"] = f"bytes={start}-"
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    resumed = start > 0 and resp.getcode() == 206
+                    if not resumed:
+                        start = 0
+                    total = int(resp.headers.get("Content-Length") or 0) + start
+                    if total and shutil.disk_usage(dest.parent).free < total - start:
+                        raise OSError("Not enough free space for download")
+                    mode = "ab" if resumed else "wb"
+                    done = start
+                    with open(temppath, mode) as fh:
+                        while True:
+                            chunk = resp.read(65536)
+                            if not chunk:
+                                break
+                            if episode_id in self._cancel_flags:
+                                fh.close()
+                                temppath.unlink(missing_ok=True)
+                                return None
+                            fh.write(chunk)
+                            done += len(chunk)
+                            if total:
+                                self._emit("download-progress", episode_id, done / total)
+                    temppath.rename(dest)
+                return dest
+            except Exception:
+                logger.exception(
+                    "Download attempt %d failed for episode %s", attempt + 1, episode_id
+                )
+                if attempt < 2 and not self._stop_event.wait(1 << attempt):
+                    continue
+                return None
 
     def _filename(self, url, title):
         ext = Path(urllib.parse.urlparse(url).path).suffix or ".mp3"

@@ -8,6 +8,8 @@ gi.require_version("Gio", "2.0")
 from gi.repository import Adw, Gio, Gtk
 
 from ..config import APP_VERSION
+from ..config import data_dir
+from ..interop import export_opml
 
 
 class SettingsPage(Adw.NavigationPage):
@@ -50,6 +52,43 @@ class SettingsPage(Adw.NavigationPage):
         group.add(clear_btn_row)
 
         pref.add(group)
+
+        backup = Adw.PreferencesGroup()
+        backup.set_title("Backup and migration")
+        backup.set_description("Export or import subscriptions as an OPML file.")
+        opml_path = data_dir() / "subscriptions.opml"
+        export_row = Adw.ActionRow()
+        export_row.set_title("Export subscriptions")
+        export_row.set_subtitle(str(opml_path))
+        export_btn = Gtk.Button(label="Export")
+        export_btn.add_css_class("flat")
+        export_btn.set_valign(Gtk.Align.CENTER)
+        export_btn.connect("clicked", lambda *_: self._export_opml(opml_path))
+        export_row.add_suffix(export_btn)
+        backup.add(export_row)
+        import_row = Adw.ActionRow()
+        import_row.set_title("Import subscriptions")
+        import_row.set_subtitle("Import the OPML file at the path above")
+        import_btn = Gtk.Button(label="Import")
+        import_btn.add_css_class("flat")
+        import_btn.set_valign(Gtk.Align.CENTER)
+        import_btn.connect("clicked", lambda *_: self.window.import_opml(opml_path))
+        import_row.add_suffix(import_btn)
+        backup.add(import_row)
+        pref.add(backup)
+
+        stats = Adw.PreferencesGroup()
+        stats.set_title("Listening")
+        stats_row = Adw.ActionRow()
+        stats_row.set_title("Statistics")
+        stats_row.set_subtitle("Listening time and completed episodes")
+        stats_btn = Gtk.Button(label="View")
+        stats_btn.add_css_class("flat")
+        stats_btn.set_valign(Gtk.Align.CENTER)
+        stats_btn.connect("clicked", lambda *_: self.window.open_statistics())
+        stats_row.add_suffix(stats_btn)
+        stats.add(stats_row)
+        pref.add(stats)
 
         # --- about group ---
         about = Adw.PreferencesGroup()
@@ -104,6 +143,10 @@ class SettingsPage(Adw.NavigationPage):
 
         dlg.connect("response", on_response)
         dlg.present(self.window)
+
+    def _export_opml(self, path):
+        export_opml(self.app.db, path)
+        self.window.toast(f"Subscriptions exported to {path}.")
 
     def _show_about(self, *args):
         about = Adw.AboutWindow.new()

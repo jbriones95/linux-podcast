@@ -23,6 +23,10 @@ Built with Python + GObject/Gtk, Libadwaita, and GStreamer.
 - Playback speed, skip controls, volume, and sleep timer
 - Delete individual downloaded episodes
 - Persistent cross-podcast playback queue
+- Resumable downloads with retry and storage checks
+- Automatic feed refresh and new-episode notifications
+- OPML subscription backup and restore
+- Listening statistics
 
 ## Running locally (desktop)
 

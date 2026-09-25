@@ -1,3 +1,6 @@
+import threading
+import time
+
 import gi
 
 gi.require_version("Adw", "1")
@@ -7,6 +10,7 @@ from .config import APP_ID, APP_NAME, data_dir
 from .database import Database
 from .downloader import DownloadManager
 from .artwork import ArtworkCache
+from .feed import fetch_feed
 from .player import Player
 from .ui.playback import Playback
 from .ui.window import MainWindow
@@ -35,6 +39,8 @@ class PostcastApplication(Adw.Application, GObject.Object):
         self._player = None
         self._playback = None
         self.window = None
+        self._refresh_source = None
+        self._refresh_thread = None
 
     @property
     def db(self):
@@ -91,8 +97,50 @@ class PostcastApplication(Adw.Application, GObject.Object):
             self.window.present()
         else:
             self.window.present()
+        if self._refresh_source is None:
+            self._refresh_source = GLib.timeout_add_seconds(1800, self._scheduled_refresh)
+            GLib.idle_add(self.refresh_feeds, True)
+
+    def _scheduled_refresh(self):
+        self.refresh_feeds(True)
+        return True
+
+    def refresh_feeds(self, notify_new=False):
+        if self._refresh_thread is not None and self._refresh_thread.is_alive():
+            return False
+        previous_refresh = self.db.get_setting("last_refresh_at")
+
+        def work():
+            notifications = []
+            for podcast in self.db.podcasts():
+                try:
+                    data, episodes = fetch_feed(podcast.feed_url)
+                    self.db.upsert_podcast(data)
+                    new_count = self.db.sync_episodes(podcast.id, episodes)
+                    if notify_new and previous_refresh and new_count:
+                        notifications.append((podcast.title, new_count))
+                except Exception:
+                    continue
+            self.db.set_setting("last_refresh_at", str(int(time.time())))
+            GLib.idle_add(self.refresh_library)
+            for title, count in notifications:
+                GLib.idle_add(self._notify_new_episodes, title, count)
+
+        self._refresh_thread = threading.Thread(target=work, daemon=True, name="postcast-refresh")
+        self._refresh_thread.start()
+        return False
+
+    def _notify_new_episodes(self, podcast_title, count):
+        notification = Gio.Notification.new("New podcast episodes")
+        notification.set_body(f"{count} new episode{'s' if count != 1 else ''} from {podcast_title}")
+        notification.set_icon(Gio.ThemedIcon.new("audio-x-generic-symbolic"))
+        self.send_notification("new-episodes", notification)
+        return False
 
     def do_shutdown(self):
+        if self._refresh_source is not None:
+            GLib.source_remove(self._refresh_source)
+            self._refresh_source = None
         if self._playback is not None:
             self._playback.shutdown()
         elif self._player is not None:

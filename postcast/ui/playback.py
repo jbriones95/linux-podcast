@@ -19,6 +19,7 @@ class Playback:
         self._queue_index = -1
         self._fallback_queue = []
         self._fallback_index = -1
+        self._last_listen_position = 0
         self._sleep_source = None
         self._rate = float(self.db.get_setting("playback_rate", 1.0))
         self._volume = float(self.db.get_setting("playback_volume", 1.0))
@@ -35,6 +36,7 @@ class Playback:
     def set_source(self, podcast, episode, queue=None):
         self.podcast = podcast
         self.episode = episode
+        self._last_listen_position = episode.position_seconds
         if queue is not None:
             self._fallback_queue = [(podcast, item) for item in queue]
             self._fallback_index = self._index_of(episode.id, self._fallback_queue)
@@ -89,6 +91,13 @@ class Playback:
             position, _duration = self.player.position()
             if position > 0:
                 self.db.set_position(self.episode.id, position)
+                self._record_listening(position)
+
+    def _record_listening(self, position):
+        delta = int(position) - int(self._last_listen_position)
+        if 0 < delta <= 60 and self.episode:
+            self.db.record_listening(self.episode.id, delta)
+        self._last_listen_position = int(position)
 
     def skip(self, seconds):
         position, duration = self.player.position()
@@ -206,6 +215,7 @@ class Playback:
     def _on_progress(self, pos, dur):
         if self.episode and pos > 0:
             self.db.set_position(self.episode.id, pos)
+            self._record_listening(pos)
 
     def _on_state(self, state):
         self.app.emit("playback-state", state)
@@ -213,6 +223,7 @@ class Playback:
     def _on_finished(self):
         if self.episode:
             self.db.mark_played(self.episode.id, True, 0)
+            self.db.record_listening(self.episode.id, 0, completed=True)
             self.app.emit("episode-finished", self.episode.id)
         self.app.emit("playback-state", "stopped")
         # auto-advance

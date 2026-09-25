@@ -6,7 +6,7 @@ from pathlib import Path
 from .config import db_path
 from .models import Episode, Podcast
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS podcasts (
@@ -96,6 +96,20 @@ class Database:
                     added_at INTEGER NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_queue_position ON queue(position, id);
+                """
+            )
+            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            self.conn.commit()
+
+        if current < 4:
+            self.conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS listening_stats (
+                    episode_id INTEGER PRIMARY KEY REFERENCES episodes(id) ON DELETE CASCADE,
+                    seconds INTEGER NOT NULL DEFAULT 0,
+                    completed INTEGER NOT NULL DEFAULT 0,
+                    last_played INTEGER NOT NULL
+                );
                 """
             )
             self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -228,12 +242,17 @@ class Database:
 
     def sync_episodes(self, podcast_id, episodes):
         with self._lock:
-            seen = []
+            new_count = 0
             for ep in episodes:
                 if not ep.get("audio_url"):
                     continue
                 guid = ep.get("guid") or ep["audio_url"]
-                seen.append(guid)
+                exists = self.conn.execute(
+                    "SELECT 1 FROM episodes WHERE podcast_id=? AND guid=?",
+                    (podcast_id, guid),
+                ).fetchone()
+                if exists is None:
+                    new_count += 1
                 self.conn.execute(
                     """INSERT INTO episodes
                        (podcast_id, guid, title, description, audio_url,
@@ -255,6 +274,7 @@ class Database:
                     ),
                 )
             self.conn.commit()
+            return new_count
 
     def mark_played(self, episode_id, played=True, position_seconds=0):
         with self._lock:
@@ -332,6 +352,35 @@ class Database:
         with self._lock:
             self.conn.execute("DELETE FROM queue")
             self.conn.commit()
+
+    # ---- statistics ----
+    def record_listening(self, episode_id, seconds, completed=False):
+        seconds = max(0, int(seconds))
+        if seconds == 0 and not completed:
+            return
+        with self._lock:
+            self.conn.execute(
+                """INSERT INTO listening_stats(episode_id, seconds, completed, last_played)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(episode_id) DO UPDATE SET
+                     seconds=listening_stats.seconds + excluded.seconds,
+                     completed=listening_stats.completed + excluded.completed,
+                     last_played=excluded.last_played""",
+                (episode_id, seconds, 1 if completed else 0, int(time.time())),
+            )
+            self.conn.commit()
+
+    def listening_summary(self):
+        with self._lock:
+            return self.conn.execute(
+                """SELECT p.id, p.title, SUM(s.seconds) AS seconds,
+                          SUM(s.completed) AS completed
+                   FROM listening_stats s
+                   JOIN episodes e ON e.id=s.episode_id
+                   JOIN podcasts p ON p.id=e.podcast_id
+                   GROUP BY p.id, p.title
+                   ORDER BY seconds DESC"""
+            ).fetchall()
 
     def set_position(self, episode_id, position_seconds):
         with self._lock:

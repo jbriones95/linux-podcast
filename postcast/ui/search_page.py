@@ -7,7 +7,7 @@ from gi.repository import Adw, Gtk, Pango
 
 class SearchPage(Adw.NavigationPage):
     def __init__(self, window):
-        super().__init__(title="Search")
+        super().__init__(title="Add podcast")
         self.window = window
         self.app = window.app
         self._search_generation = 0
@@ -27,7 +27,40 @@ class SearchPage(Adw.NavigationPage):
         self.entry.connect("activate", self._on_search)
         self.entry.set_search_delay(600)
         self.entry.connect("search-changed", self._on_search)
-        header.set_title_widget(self.entry)
+
+        search_title = Gtk.Label(label="Find a podcast")
+        search_title.set_xalign(0)
+        search_title.add_css_class("heading")
+
+        rss_title = Gtk.Label(label="Add by RSS feed")
+        rss_title.set_xalign(0)
+        rss_title.add_css_class("heading")
+        self.rss_entry = Gtk.Entry(placeholder_text="https://example.com/feed.xml")
+        self.rss_entry.set_hexpand(True)
+        self.rss_entry.set_focusable(False)
+        self.rss_entry.set_focus_on_click(False)
+        rss_gesture = Gtk.GestureClick.new()
+        rss_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        rss_gesture.connect("pressed", self._on_rss_pressed)
+        self.rss_entry.add_controller(rss_gesture)
+        self.rss_button = Gtk.Button(label="Add")
+        self.rss_button.add_css_class("suggested-action")
+        self.rss_button.set_size_request(72, 48)
+        self.rss_button.connect("clicked", self._on_rss_add)
+        self.rss_entry.connect("activate", self._on_rss_add)
+        rss_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        rss_row.append(self.rss_entry)
+        rss_row.append(self.rss_button)
+
+        controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        controls.set_margin_start(16)
+        controls.set_margin_end(16)
+        controls.set_margin_top(16)
+        controls.set_margin_bottom(8)
+        controls.append(search_title)
+        controls.append(self.entry)
+        controls.append(rss_title)
+        controls.append(rss_row)
 
         self._listbox = Gtk.ListBox()
         self._listbox.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -38,20 +71,46 @@ class SearchPage(Adw.NavigationPage):
         self._status.set_title("Search")
         self._status.set_description("Find new podcasts to subscribe to.")
 
-        scroll = Gtk.ScrolledWindow(vexpand=True)
-        scroll.set_child(self._listbox)
-
         stack = Gtk.Stack(vexpand=True)
         stack.add_named(self._status, "empty")
-        stack.add_named(scroll, "results")
+        stack.add_named(self._listbox, "results")
         self._stack = stack
 
-        toolbar.set_content(stack)
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        body.append(controls)
+        body.append(stack)
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        scroll.set_child(body)
+        toolbar.set_content(scroll)
         self.set_child(toolbar)
 
     def _on_search_pressed(self, _gesture, _n_press, _x, _y):
         self.entry.set_focusable(True)
         self.entry.grab_focus()
+
+    def _on_rss_pressed(self, _gesture, _n_press, _x, _y):
+        self.rss_entry.set_focusable(True)
+        self.rss_entry.grab_focus()
+
+    def _on_rss_add(self, *_args):
+        url = self.rss_entry.get_text().strip()
+        if not url.startswith(("http://", "https://")):
+            self.window.toast("Enter a valid http(s) RSS feed URL.")
+            return
+        self.rss_button.set_sensitive(False)
+        self.rss_button.set_label("Adding…")
+
+        def done(_podcast_id, err):
+            if err:
+                self.rss_button.set_sensitive(True)
+                self.rss_button.set_label("Add")
+                self.window.toast(f"Could not add feed: {err.get('error', '')}")
+                return
+            self.rss_entry.set_text("")
+            self.rss_button.set_label("Added")
+            self.window.toast("Podcast added.")
+
+        self.window._subscribe(url, done)
 
     # ---------- actions ----------
     def _on_search(self, *args):

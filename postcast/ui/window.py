@@ -183,29 +183,12 @@ class MainWindow(Adw.ApplicationWindow):
         self.nav.push(AboutPage(self))
 
     def add_dialog(self):
-        entry = Gtk.Entry(placeholder_text="https://…/feed.xml")
-        entry.set_hexpand(True)
-        dialog = Adw.AlertDialog.new(
-            "Add podcast",
-            "Enter the RSS/Atom feed URL of the podcast to subscribe to.",
-        )
-        dialog.set_extra_child(entry)
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("add", "Add")
-        dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
-        dialog.set_default_response("add")
-
-        def on_response(dlg, resp):
-            if resp != "add":
-                return
-            url = entry.get_text().strip()
-            if url:
-                self._subscribe(url)
-
-        dialog.connect("response", on_response)
-        dialog.present(self)
+        self.open_add_podcast()
 
     def open_search(self):
+        self.open_add_podcast()
+
+    def open_add_podcast(self):
         page = SearchPage(self)
         self.nav.push(page)
 

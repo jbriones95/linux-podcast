@@ -1,7 +1,7 @@
 import gi
 
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst
+from gi.repository import Gst, GLib
 
 from ..player import Player
 
@@ -17,6 +17,10 @@ class Playback:
         self.episode = None
         self._queue = []      # Episode objects
         self._queue_index = -1
+        self._sleep_source = None
+        self._rate = float(self.db.get_setting("playback_rate", 1.0))
+        self._volume = float(self.db.get_setting("playback_volume", 1.0))
+        self.player.set_volume(self._volume)
 
         player.connect("position", self._on_position)
         player.connect("progress", self._on_progress)
@@ -45,13 +49,63 @@ class Playback:
 
     def pause(self):
         self.player.pause()
+        self._save_position()
 
-    def shutdown(self):
-        """Persist the current position before the application exits."""
+    def stop(self):
+        self._save_position()
+        self.player.stop()
+
+    def _save_position(self):
         if self.episode:
             position, _duration = self.player.position()
             if position > 0:
                 self.db.set_position(self.episode.id, position)
+
+    def skip(self, seconds):
+        position, duration = self.player.position()
+        target = max(0, position + int(seconds))
+        if duration:
+            target = min(target, duration)
+        self.player.seek(target)
+
+    def set_speed(self, rate):
+        self._rate = max(0.5, min(3.0, float(rate)))
+        self.db.set_setting("playback_rate", self._rate)
+        self.player.set_rate(self._rate)
+
+    def speed(self):
+        return self._rate
+
+    def set_volume(self, value):
+        self._volume = max(0.0, min(1.0, float(value)))
+        self.db.set_setting("playback_volume", self._volume)
+        self.player.set_volume(self._volume)
+
+    def volume(self):
+        return self._volume
+
+    def set_sleep_timer(self, minutes):
+        self.cancel_sleep_timer()
+        if minutes:
+            self._sleep_source = GLib.timeout_add_seconds(
+                int(minutes) * 60, self._sleep_expired
+            )
+
+    def cancel_sleep_timer(self):
+        if self._sleep_source is not None:
+            GLib.source_remove(self._sleep_source)
+            self._sleep_source = None
+
+    def _sleep_expired(self):
+        self._sleep_source = None
+        self.pause()
+        self.app.toast("Sleep timer ended.")
+        return GLib.SOURCE_REMOVE
+
+    def shutdown(self):
+        """Persist the current position before the application exits."""
+        self._save_position()
+        self.cancel_sleep_timer()
         self.player.close()
 
     # ---------- queue ----------
@@ -63,6 +117,7 @@ class Playback:
             self.app.toast("This episode has no playable audio URL.")
             return
         self.player.load(uri, episode.position_seconds)
+        self.player.set_rate(self._rate)
         self.player.play()
 
     def play_next(self):

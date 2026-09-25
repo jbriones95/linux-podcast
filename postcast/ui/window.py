@@ -226,8 +226,12 @@ class MainWindow(Adw.ApplicationWindow):
 
     def refresh_current_page(self):
         page = self.current_page()
-        if isinstance(page, PodcastPage):
+        if isinstance(page, LibraryPage):
+            page.refresh()
+        elif isinstance(page, PodcastPage):
             page.rebuild()
+        elif isinstance(page, EpisodePage):
+            page.refresh()
 
     def delete_episode_audio(self, episode_id):
         ep = self.app.db.episode(episode_id)
@@ -238,3 +242,4 @@ class MainWindow(Adw.ApplicationWindow):
                 pass
             self.app.db.clear_download(episode_id)
             self.toast("Download deleted.")
+            self.refresh_current_page()

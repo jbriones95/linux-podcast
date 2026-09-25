@@ -64,6 +64,18 @@ class EpisodeRow(Gtk.ListBoxRow):
         text_box.append(self.state)
         box.append(text_box)
 
+        self.favorite_btn = Gtk.Button()
+        self.favorite_btn.add_css_class("flat")
+        self.favorite_btn.set_valign(Gtk.Align.CENTER)
+        self.favorite_btn.connect("clicked", self._on_favorite)
+        box.append(self.favorite_btn)
+
+        self.played_btn = Gtk.Button()
+        self.played_btn.add_css_class("flat")
+        self.played_btn.set_valign(Gtk.Align.CENTER)
+        self.played_btn.connect("clicked", self._on_played)
+        box.append(self.played_btn)
+
         # download button
         self.download_btn = Gtk.Button()
         self.download_btn.set_icon_name("folder-download-symbolic")
@@ -87,22 +99,34 @@ class EpisodeRow(Gtk.ListBoxRow):
         self._progress = None
         self._update_download_icon()
         self._update_play_icon()
+        self._update_state_icons()
 
     def rerender(self, episode):
         if episode is None:
             return
         self.episode.played = episode.played
+        self.episode.favorite = episode.favorite
         self.episode.position_seconds = episode.position_seconds
         self.episode.downloaded_path = episode.downloaded_path
         self._update_download_icon()
         self._update_play_icon()
+        self._update_state_icons()
 
     # ---- actions ----
     def _on_play(self, *args):
         self.window.play_episode(self.episode, self.podcast)
 
     def _on_download(self, *args):
-        self.app.download_toggle(self.episode)
+        if self.episode.is_downloaded:
+            self.window.delete_episode_audio(self.episode.id)
+        else:
+            self.app.download_toggle(self.episode)
+
+    def _on_favorite(self, *args):
+        self.app.toggle_favorite(self.episode)
+
+    def _on_played(self, *args):
+        self.app.toggle_played(self.episode)
 
     # ---- state ----
     def update_download_state(self, downloading=False, progress=None):
@@ -119,6 +143,20 @@ class EpisodeRow(Gtk.ListBoxRow):
             self.play_btn.set_icon_name("media-playback-pause-symbolic")
         else:
             self.play_btn.set_icon_name("media-playback-start-symbolic")
+
+    def _update_state_icons(self):
+        if self.episode.favorite:
+            self.favorite_btn.set_icon_name("starred-symbolic")
+            self.favorite_btn.set_tooltip_text("Remove favorite")
+        else:
+            self.favorite_btn.set_icon_name("non-starred-symbolic")
+            self.favorite_btn.set_tooltip_text("Add favorite")
+        if self.episode.played:
+            self.played_btn.set_icon_name("mail-read-symbolic")
+            self.played_btn.set_tooltip_text("Mark unplayed")
+        else:
+            self.played_btn.set_icon_name("mail-unread-symbolic")
+            self.played_btn.set_tooltip_text("Mark played")
 
     def _update_download_icon(self):
         if getattr(self, "_downloading", False):

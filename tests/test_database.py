@@ -53,6 +53,7 @@ class DatabaseTests(unittest.TestCase):
             )
             episode = db.episodes(podcast_id)[0]
             db.mark_played(episode.id, True, 42)
+            db.set_favorite(episode.id, True)
             db.sync_episodes(
                 podcast_id,
                 [{"guid": "episode-1", "title": "Updated", "audio_url": "https://example.test/1.mp3"}],
@@ -60,7 +61,11 @@ class DatabaseTests(unittest.TestCase):
             updated = db.episode(episode.id)
             self.assertEqual(updated.title, "Updated")
             self.assertTrue(updated.played)
+            self.assertTrue(updated.favorite)
             self.assertEqual(updated.position_seconds, 42)
+            results = db.search_episodes("updated", favorites_only=True)
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0][0].id, episode.id)
             db.close()
 
     def test_future_schema_is_rejected(self):
@@ -72,6 +77,34 @@ class DatabaseTests(unittest.TestCase):
             conn.close()
             with self.assertRaises(RuntimeError):
                 Database(path)
+
+    def test_schema_version_one_gets_favorite_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "library.db"
+            conn = sqlite3.connect(path)
+            conn.executescript(
+                """
+                CREATE TABLE podcasts (id INTEGER PRIMARY KEY, feed_url TEXT UNIQUE NOT NULL);
+                CREATE TABLE episodes (
+                    id INTEGER PRIMARY KEY, podcast_id INTEGER NOT NULL, guid TEXT,
+                    title TEXT, description TEXT, audio_url TEXT, duration_seconds INTEGER,
+                    published INTEGER, downloaded_path TEXT, played INTEGER DEFAULT 0,
+                    position_seconds INTEGER DEFAULT 0, UNIQUE(podcast_id, guid)
+                );
+                CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+                PRAGMA user_version = 1;
+                """
+            )
+            conn.commit()
+            conn.close()
+
+            db = Database(path)
+            columns = {
+                row[1] for row in db.conn.execute("PRAGMA table_info(episodes)").fetchall()
+            }
+            self.assertIn("favorite", columns)
+            self.assertEqual(db.conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+            db.close()
 
 
 if __name__ == "__main__":

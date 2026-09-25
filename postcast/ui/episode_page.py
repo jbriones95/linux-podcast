@@ -57,9 +57,16 @@ class EpisodePage(Adw.NavigationPage):
         play.add_css_class("suggested-action")
         play.connect("clicked", lambda *_: self.window.play_episode(self.episode, self.podcast))
         actions.append(play)
-        download = Gtk.Button(label="Download")
-        download.connect("clicked", lambda *_: self.app.download_toggle(self.episode))
-        actions.append(download)
+        self.download = Gtk.Button()
+        self.download.connect("clicked", self._on_download)
+        actions.append(self.download)
+        self.favorite = Gtk.Button()
+        self.favorite.connect("clicked", self._on_favorite)
+        actions.append(self.favorite)
+        self.played = Gtk.Button()
+        self.played.connect("clicked", self._on_played)
+        actions.append(self.played)
+        self._update_action_labels()
         content.append(actions)
 
         description = Gtk.Label(label=self.episode.description or "No description available.")
@@ -73,6 +80,33 @@ class EpisodePage(Adw.NavigationPage):
         scroll.set_child(content)
         toolbar.set_content(scroll)
         self.set_child(toolbar)
+
+    def _update_action_labels(self):
+        self.download.set_label("Delete download" if self.episode.is_downloaded else "Download")
+        self.favorite.set_label("Unfavorite" if self.episode.favorite else "Favorite")
+        self.played.set_label("Mark unplayed" if self.episode.played else "Mark played")
+
+    def _on_download(self, *args):
+        if self.episode.is_downloaded:
+            self.window.delete_episode_audio(self.episode.id)
+        else:
+            self.app.download_toggle(self.episode)
+        self.episode = self.app.db.episode(self.episode.id)
+        self._update_action_labels()
+
+    def _on_favorite(self, *args):
+        self.app.toggle_favorite(self.episode)
+        self.episode = self.app.db.episode(self.episode.id)
+        self._update_action_labels()
+
+    def _on_played(self, *args):
+        self.app.toggle_played(self.episode)
+        self.episode = self.app.db.episode(self.episode.id)
+        self._update_action_labels()
+
+    def refresh(self):
+        self.episode = self.app.db.episode(self.episode.id)
+        self._update_action_labels()
 
     @staticmethod
     def _set_artwork(image):

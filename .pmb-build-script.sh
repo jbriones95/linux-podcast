@@ -11,7 +11,7 @@ PKG="$REAL/testing/postcast"
 
 echo "== 1. tree in place? =="
 ls -la "$PKG"
-test -f "$PKG/APKBUILD" && test -f "$PKG/postcast-0.1.3.tar.gz" && echo "OK files present"
+test -f "$PKG/APKBUILD" && test -f "$PKG/postcast-0.1.4.tar.gz" && echo "OK files present"
 
 echo
 echo "== 2. point pmbootstrap aports at the REAL pmaports (has PM.CFG-must-be-pmaports.cfg) =="

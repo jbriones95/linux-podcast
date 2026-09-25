@@ -23,6 +23,7 @@ class Player:
         self._position_timer = None
         self._callbacks = {}
         self._seek_target = None
+        self._rate = 1.0
         self._setup_volume()
 
     def _setup_volume(self):
@@ -38,6 +39,7 @@ class Player:
     def load(self, uri, position_seconds=0):
         self.stop()
         self._uri = uri
+        self._last_saved = None
         self.playbin.set_property("uri", uri)
         self._seek_target = position_seconds
         self._set_state(self.STATE_PAUSED)
@@ -83,6 +85,27 @@ class Player:
             self.playbin.set_property("volume", value)
         except Exception:
             pass
+
+    def set_rate(self, rate):
+        rate = max(0.5, min(3.0, float(rate)))
+        self._rate = rate
+        if not self._uri:
+            return
+        position, duration = self.position()
+        if duration <= 0:
+            return
+        self.playbin.seek(
+            rate,
+            Gst.Format.TIME,
+            Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+            Gst.SeekType.SET,
+            position * Gst.SECOND,
+            Gst.SeekType.END,
+            0,
+        )
+
+    def rate(self):
+        return self._rate
 
     def seek(self, seconds):
         seconds = max(0, int(seconds))

@@ -18,6 +18,10 @@ Built with Python + GObject/Gtk, Libadwaita, and GStreamer.
 - Resume playback where you left off, per episode
 - Auto-advance to the next unplayed episode
 - Episode artwork, descriptions, and durations
+- Favorite and mark episodes played or unplayed
+- Search and filter episodes in the local library
+- Playback speed, skip controls, volume, and sleep timer
+- Delete individual downloaded episodes
 
 ## Running locally (desktop)
 

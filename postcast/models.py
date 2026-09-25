@@ -40,6 +40,7 @@ class Episode:
     published: Optional[int] = None
     downloaded_path: str = ""
     played: bool = False
+    favorite: bool = False
     position_seconds: int = 0
 
     @property
@@ -67,5 +68,6 @@ class Episode:
             published=row["published"],
             downloaded_path=row["downloaded_path"] or "",
             played=bool(row["played"]),
+            favorite=bool(row["favorite"]),
             position_seconds=row["position_seconds"] or 0,
         )

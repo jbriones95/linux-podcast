@@ -5,7 +5,7 @@ from pathlib import Path
 from .config import db_path
 from .models import Episode, Podcast
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS podcasts (
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     published INTEGER,
     downloaded_path TEXT DEFAULT '',
     played INTEGER DEFAULT 0,
+    favorite INTEGER DEFAULT 0,
     position_seconds INTEGER DEFAULT 0,
     UNIQUE(podcast_id, guid)
 );
@@ -66,6 +67,21 @@ class Database:
             # CREATE IF NOT EXISTS makes this safe for databases created before
             # schema versioning was introduced.
             self.conn.executescript(SCHEMA)
+            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            self.conn.commit()
+
+        if current < 2:
+            columns = {
+                row[1]
+                for row in self.conn.execute("PRAGMA table_info(episodes)").fetchall()
+            }
+            if "favorite" not in columns:
+                self.conn.execute(
+                    "ALTER TABLE episodes ADD COLUMN favorite INTEGER DEFAULT 0"
+                )
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_episodes_favorite ON episodes(favorite)"
+            )
             self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.conn.commit()
 
@@ -140,6 +156,53 @@ class Database:
             ).fetchall()
             return [Episode.from_row(r) for r in rows]
 
+    def search_episodes(
+        self, query="", favorites_only=False, unplayed_only=False, downloaded_only=False
+    ):
+        """Search local episode and podcast metadata with optional filters."""
+        with self._lock:
+            clauses = []
+            params = []
+            if query.strip():
+                term = f"%{query.strip()}%"
+                clauses.append(
+                    "(e.title LIKE ? COLLATE NOCASE OR e.description LIKE ? COLLATE NOCASE "
+                    "OR p.title LIKE ? COLLATE NOCASE OR p.author LIKE ? COLLATE NOCASE)"
+                )
+                params.extend([term, term, term, term])
+            if favorites_only:
+                clauses.append("e.favorite = 1")
+            if unplayed_only:
+                clauses.append("e.played = 0")
+            if downloaded_only:
+                clauses.append("e.downloaded_path != ''")
+
+            where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+            rows = self.conn.execute(
+                f"""SELECT e.*, p.id AS result_podcast_id,
+                           p.feed_url AS result_feed_url, p.title AS result_podcast_title,
+                           p.author AS result_podcast_author, p.description AS result_podcast_description,
+                           p.image_url AS result_podcast_image_url, p.link AS result_podcast_link
+                    FROM episodes e JOIN podcasts p ON p.id = e.podcast_id
+                    {where}
+                    ORDER BY COALESCE(e.published, 0) DESC, e.id DESC""",
+                params,
+            ).fetchall()
+            results = []
+            for row in rows:
+                episode = Episode.from_row(row)
+                podcast = Podcast(
+                    id=row["result_podcast_id"],
+                    feed_url=row["result_feed_url"],
+                    title=row["result_podcast_title"] or "",
+                    author=row["result_podcast_author"] or "",
+                    description=row["result_podcast_description"] or "",
+                    image_url=row["result_podcast_image_url"] or "",
+                    link=row["result_podcast_link"] or "",
+                )
+                results.append((episode, podcast))
+            return results
+
     def episode(self, episode_id) -> Episode:
         with self._lock:
             row = self.conn.execute(
@@ -182,6 +245,14 @@ class Database:
             self.conn.execute(
                 "UPDATE episodes SET played=?, position_seconds=? WHERE id=?",
                 (1 if played else 0, position_seconds, episode_id),
+            )
+            self.conn.commit()
+
+    def set_favorite(self, episode_id, favorite=True):
+        with self._lock:
+            self.conn.execute(
+                "UPDATE episodes SET favorite=? WHERE id=?",
+                (1 if favorite else 0, episode_id),
             )
             self.conn.commit()
 

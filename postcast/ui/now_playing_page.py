@@ -69,6 +69,51 @@ class NowPlayingPage(Adw.NavigationPage):
         controls.append(self.play_btn)
         content.append(controls)
 
+        seek_controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        seek_controls.set_halign(Gtk.Align.CENTER)
+        back_btn = Gtk.Button(label="-15s")
+        back_btn.set_tooltip_text("Skip back 15 seconds")
+        back_btn.connect("clicked", lambda *_: self.app.playback.skip(-15))
+        seek_controls.append(back_btn)
+        forward_btn = Gtk.Button(label="+30s")
+        forward_btn.set_tooltip_text("Skip forward 30 seconds")
+        forward_btn.connect("clicked", lambda *_: self.app.playback.skip(30))
+        seek_controls.append(forward_btn)
+        content.append(seek_controls)
+
+        playback_controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        speed_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        speed_row.append(Gtk.Label(label="Speed"))
+        self.speed_dropdown = Gtk.DropDown.new(
+            Gtk.StringList.new(["0.75x", "1.0x", "1.25x", "1.5x", "2.0x"]), None
+        )
+        speed_values = [0.75, 1.0, 1.25, 1.5, 2.0]
+        speed_index = min(range(len(speed_values)), key=lambda i: abs(speed_values[i] - self.app.playback.speed()))
+        self.speed_dropdown.set_selected(speed_index)
+        self.speed_dropdown.connect("notify::selected", self._on_speed_changed, speed_values)
+        speed_row.append(self.speed_dropdown)
+        playback_controls.append(speed_row)
+
+        volume_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        volume_row.append(Gtk.Label(label="Volume"))
+        self.volume = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 0.01)
+        self.volume.set_value(self.app.playback.volume())
+        self.volume.set_hexpand(True)
+        self.volume.connect("value-changed", self._on_volume_changed)
+        volume_row.append(self.volume)
+        playback_controls.append(volume_row)
+
+        sleep_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        sleep_row.append(Gtk.Label(label="Sleep timer"))
+        self.sleep_dropdown = Gtk.DropDown.new(
+            Gtk.StringList.new(["Off", "15 minutes", "30 minutes", "60 minutes"]), None
+        )
+        self.sleep_minutes = [0, 15, 30, 60]
+        self.sleep_dropdown.connect("notify::selected", self._on_sleep_changed)
+        sleep_row.append(self.sleep_dropdown)
+        playback_controls.append(sleep_row)
+        content.append(playback_controls)
+
         description = Gtk.Label(label=self.episode.description if self.episode else "")
         description.set_wrap(True)
         description.set_selectable(True)
@@ -107,6 +152,20 @@ class NowPlayingPage(Adw.NavigationPage):
     def _on_seek_released(self, gesture, n_press, x, y):
         self._seeking = False
         self.app.playback.seek_to_fraction(self.seek.get_value())
+
+    def _on_speed_changed(self, dropdown, _param, values):
+        self.app.playback.set_speed(values[dropdown.get_selected()])
+
+    def _on_volume_changed(self, scale):
+        self.app.playback.set_volume(scale.get_value())
+
+    def _on_sleep_changed(self, dropdown, _param):
+        minutes = self.sleep_minutes[dropdown.get_selected()]
+        self.app.playback.set_sleep_timer(minutes)
+        if minutes:
+            self.window.toast(f"Sleep timer set for {minutes} minutes.")
+        else:
+            self.window.toast("Sleep timer off.")
 
     @staticmethod
     def _fmt(seconds):

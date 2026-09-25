@@ -122,6 +122,16 @@ class PostcastApplication(Adw.Application, GObject.Object):
         )
         self.toast("Downloading…")
 
+    def toggle_favorite(self, episode):
+        self.db.set_favorite(episode.id, not episode.favorite)
+        self.refresh_library()
+        self.window.refresh_current_page()
+
+    def toggle_played(self, episode):
+        self.db.mark_played(episode.id, not episode.played, 0)
+        self.refresh_library()
+        self.window.refresh_current_page()
+
     def _on_dl_started(self, episode_id):
         self._refresh_dl_rows(episode_id, downloading=True)
 

@@ -7,6 +7,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gtk, GLib, Pango
 
 from ..feed import fetch_feed
+from .episode_row import EpisodeRow
 
 
 class LibraryPage(Adw.NavigationPage):
@@ -39,6 +40,24 @@ class LibraryPage(Adw.NavigationPage):
         settings_btn.connect("clicked", lambda *_: window.open_settings())
         header.pack_start(settings_btn)
 
+        self._search_entry = Gtk.SearchEntry()
+        self._search_entry.set_placeholder_text("Search library")
+        self._search_entry.set_width_chars(14)
+        self._search_entry.connect("search-changed", lambda *_: self.refresh())
+        header.pack_start(self._search_entry)
+
+        self._favorite_filter = Gtk.ToggleButton()
+        self._favorite_filter.set_icon_name("starred-symbolic")
+        self._favorite_filter.set_tooltip_text("Show favorites")
+        self._favorite_filter.connect("toggled", lambda *_: self.refresh())
+        header.pack_start(self._favorite_filter)
+
+        self._unplayed_filter = Gtk.ToggleButton()
+        self._unplayed_filter.set_icon_name("mail-unread-symbolic")
+        self._unplayed_filter.set_tooltip_text("Show unplayed episodes")
+        self._unplayed_filter.connect("toggled", lambda *_: self.refresh())
+        header.pack_start(self._unplayed_filter)
+
         self._listbox = Gtk.ListBox()
         self._listbox.set_selection_mode(Gtk.SelectionMode.NONE)
         self._listbox.connect("row-activated", self._on_row_activated)
@@ -69,11 +88,33 @@ class LibraryPage(Adw.NavigationPage):
         GLib.idle_add(self.refresh)
 
     def refresh(self):
-        podcasts = self.app.db.podcasts()
         while (row := self._listbox.get_first_child()) is not None:
             self._listbox.remove(row)
 
+        query = self._search_entry.get_text().strip()
+        favorites_only = self._favorite_filter.get_active()
+        unplayed_only = self._unplayed_filter.get_active()
+        if query or favorites_only or unplayed_only:
+            results = self.app.db.search_episodes(
+                query, favorites_only=favorites_only, unplayed_only=unplayed_only
+            )
+            if not results:
+                self._status.set_title("No matching episodes")
+                self._status.set_description("Try a different search or filter.")
+                self._stack.set_visible_child_name("empty")
+                return
+            self._stack.set_visible_child_name("list")
+            for episode, podcast in results:
+                self._listbox.append(EpisodeRow(self.window, episode, podcast))
+            return
+
+        podcasts = self.app.db.podcasts()
+
         if not podcasts:
+            self._status.set_title("No podcasts yet")
+            self._status.set_description(
+                "Search for podcasts or add one by its RSS feed URL."
+            )
             self._stack.set_visible_child_name("empty")
             return
         self._stack.set_visible_child_name("list")
@@ -116,7 +157,10 @@ class LibraryPage(Adw.NavigationPage):
         return cb
 
     def _on_row_activated(self, listbox, row):
-        self.window.open_podcast(row.podcast.id)
+        if isinstance(row, EpisodeRow):
+            self.window.open_episode(row.episode.id, row.podcast.id)
+        else:
+            self.window.open_podcast(row.podcast.id)
 
     def _refresh_all(self):
         podcasts = self.app.db.podcasts()

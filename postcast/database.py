@@ -240,6 +240,31 @@ class Database:
             ).fetchone()
             return Episode.from_row(row)
 
+    def episode_by_audio_url(self, audio_url):
+        with self._lock:
+            row = self.conn.execute(
+                """SELECT e.*, p.id AS result_podcast_id,
+                          p.feed_url AS result_feed_url, p.title AS result_podcast_title,
+                          p.author AS result_podcast_author, p.description AS result_podcast_description,
+                          p.image_url AS result_podcast_image_url, p.link AS result_podcast_link
+                   FROM episodes e JOIN podcasts p ON p.id=e.podcast_id
+                   WHERE e.audio_url=?""",
+                (audio_url,),
+            ).fetchone()
+            if row is None:
+                return None
+            episode = Episode.from_row(row)
+            podcast = Podcast(
+                id=row["result_podcast_id"],
+                feed_url=row["result_feed_url"],
+                title=row["result_podcast_title"] or "",
+                author=row["result_podcast_author"] or "",
+                description=row["result_podcast_description"] or "",
+                image_url=row["result_podcast_image_url"] or "",
+                link=row["result_podcast_link"] or "",
+            )
+            return episode, podcast
+
     def sync_episodes(self, podcast_id, episodes):
         with self._lock:
             new_count = 0

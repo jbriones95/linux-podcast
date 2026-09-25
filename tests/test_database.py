@@ -148,6 +148,21 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(summary[0]["completed"], 1)
             db.close()
 
+    def test_episode_can_be_resolved_for_external_playback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            podcast_id = db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show"}
+            )
+            db.sync_episodes(
+                podcast_id,
+                [{"guid": "one", "title": "One", "audio_url": "https://example.test/one.mp3"}],
+            )
+            match = db.episode_by_audio_url("https://example.test/one.mp3")
+            self.assertEqual(match[0].title, "One")
+            self.assertEqual(match[1].title, "Show")
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

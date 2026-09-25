@@ -131,7 +131,10 @@ class MprisService:
                     _track_id, position = params.unpack()
                     playback.player.seek(int(position / 1_000_000))
                 elif method == "OpenUri":
-                    pass
+                    uri = params.unpack()[0]
+                    match = self.app.db.episode_by_audio_url(uri)
+                    if match is not None:
+                        self.app.playback.play_episode(match[1], match[0])
             invocation.return_value(GLib.Variant("()", ()))
         except Exception as exc:
             invocation.return_dbus_error("org.mpris.MediaPlayer2.Error", str(exc))

@@ -102,6 +102,14 @@ class MainWindow(Adw.ApplicationWindow):
     def toast(self, message):
         self._toast_overlay.add_toast(Adw.Toast.new(message))
 
+    def finish_initial_focus_setup(self):
+        """Set a non-editable initial focus after GTK has mapped the window."""
+        target = self.library.initial_focus_target
+        self.set_focus(target)
+        target.grab_focus()
+        self.library._search_entry.set_focusable(True)
+        return GLib.SOURCE_REMOVE
+
     def _on_now_playing(self, app, podcast, episode):
         self.player_bar.set_episode(episode, podcast)
         self._refresh_rows()
@@ -133,8 +141,8 @@ class MainWindow(Adw.ApplicationWindow):
         content.append(text)
         return content
 
-    def _on_section_toggled(self, button, active, name):
-        if active:
+    def _on_section_toggled(self, button, name):
+        if button.get_active():
             self.switch_section(name)
 
     def switch_section(self, name):

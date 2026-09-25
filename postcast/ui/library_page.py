@@ -38,6 +38,9 @@ class LibraryPage(Adw.NavigationPage):
         self._search_entry.set_placeholder_text("Search library")
         self._search_entry.set_hexpand(True)
         self._search_entry.set_focus_on_click(True)
+        # Keep GTK's initial focus traversal from opening the mobile keyboard.
+        # MainWindow enables this again after the window has been presented.
+        self._search_entry.set_focusable(False)
         self._search_entry.connect("search-changed", lambda *_: self.refresh())
 
         tools = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -93,19 +96,15 @@ class LibraryPage(Adw.NavigationPage):
         self._stack = stack
 
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        body.set_focusable(True)
+        self.initial_focus_target = body
         body.append(tools)
         body.append(actions)
         body.append(stack)
         toolbar.set_content(body)
         self.set_child(toolbar)
-        GLib.idle_add(self._initial_refresh)
+        GLib.idle_add(self.refresh)
 
-    def _initial_refresh(self):
-        self.refresh()
-        # Do not let the first text-entry widget claim focus and open the
-        # on-screen keyboard when the app launches.
-        self._listbox.grab_focus()
-        return GLib.SOURCE_REMOVE
 
     def refresh(self):
         while (row := self._listbox.get_first_child()) is not None:

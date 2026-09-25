@@ -104,6 +104,7 @@ class PostcastApplication(Adw.Application, GObject.Object):
         if self.window is None:
             self.window = MainWindow(application=self)
             self.window.present()
+            GLib.idle_add(self.window.finish_initial_focus_setup)
         else:
             self.window.present()
         if self._refresh_source is None:

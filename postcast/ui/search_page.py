@@ -18,6 +18,12 @@ class SearchPage(Adw.NavigationPage):
 
         self.entry = Gtk.SearchEntry(placeholder_text="Search podcasts…")
         self.entry.set_hexpand(True)
+        self.entry.set_focusable(False)
+        self.entry.set_focus_on_click(False)
+        search_gesture = Gtk.GestureClick.new()
+        search_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        search_gesture.connect("pressed", self._on_search_pressed)
+        self.entry.add_controller(search_gesture)
         self.entry.connect("activate", self._on_search)
         self.entry.set_search_delay(600)
         self.entry.connect("search-changed", self._on_search)
@@ -42,6 +48,10 @@ class SearchPage(Adw.NavigationPage):
 
         toolbar.set_content(stack)
         self.set_child(toolbar)
+
+    def _on_search_pressed(self, _gesture, _n_press, _x, _y):
+        self.entry.set_focusable(True)
+        self.entry.grab_focus()
 
     # ---------- actions ----------
     def _on_search(self, *args):
@@ -111,8 +121,8 @@ class SearchPage(Adw.NavigationPage):
             sub_btn.add_css_class("suggested-action")
             sub_btn.connect(
                 "clicked",
-                lambda *_, row=row, url=item["feed_url"], button=sub_btn: self._subscribe(
-                    row, url, button
+                 lambda *_, row=row, url=item["feed_url"], button=sub_btn, image=item.get("image_url", ""): self._subscribe(
+                     row, url, button, image
                 ),
             )
             sub_btn.set_size_request(-1, 44)
@@ -128,7 +138,7 @@ class SearchPage(Adw.NavigationPage):
                 image.set_from_paintable(texture)
         return cb
 
-    def _subscribe(self, row, feed_url, button):
+    def _subscribe(self, row, feed_url, button, fallback_image_url=""):
         button.set_sensitive(False)
         button.set_label("Subscribing…")
 
@@ -142,4 +152,4 @@ class SearchPage(Adw.NavigationPage):
             button.remove_css_class("suggested-action")
             button.add_css_class("success")
 
-        self.window._subscribe(feed_url, done)
+        self.window._subscribe(feed_url, done, fallback_image_url)

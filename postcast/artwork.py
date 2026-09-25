@@ -88,6 +88,10 @@ class ArtworkCache:
         pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
             str(path), size, size, True
         )
+        side = min(pixbuf.get_width(), pixbuf.get_height())
+        x = (pixbuf.get_width() - side) // 2
+        y = (pixbuf.get_height() - side) // 2
+        pixbuf = pixbuf.new_subpixbuf(x, y, side, side)
         pixbuf = pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
         text = Gdk.Texture.new_for_pixbuf(pixbuf)
         return text

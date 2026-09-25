@@ -104,10 +104,10 @@ class MainWindow(Adw.ApplicationWindow):
 
     def finish_initial_focus_setup(self):
         """Set a non-editable initial focus after GTK has mapped the window."""
+        self.library.reset_search_focus()
         target = self.library.initial_focus_target
         self.set_focus(target)
         target.grab_focus()
-        self.library._search_entry.set_focusable(True)
         return GLib.SOURCE_REMOVE
 
     def _on_now_playing(self, app, podcast, episode):
@@ -150,6 +150,8 @@ class MainWindow(Adw.ApplicationWindow):
         nav.pop_to_page(page)
         self.nav = nav
         self._section_stack.set_visible_child_name(name)
+        if name == "shows":
+            self.library.reset_search_focus()
         page.refresh()
 
     # ---------- navigation ----------
@@ -208,7 +210,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.nav.push(page)
 
     # ---------- feed subscribe helper (main-thread safe) ----------
-    def _subscribe(self, feed_url, on_done=None):
+    def _subscribe(self, feed_url, on_done=None, fallback_image_url=""):
         def work():
             try:
                 podcast, episodes = fetch_feed(feed_url)
@@ -228,6 +230,8 @@ class MainWindow(Adw.ApplicationWindow):
                     on_done,
                 )
                 return
+            if not podcast.get("image_url") and fallback_image_url:
+                podcast["image_url"] = fallback_image_url
             podcast_id = self.app.db.upsert_podcast(podcast)
             self.app.db.sync_episodes(podcast_id, episodes)
             GLib.idle_add(self._subscribe_done, podcast_id, None, on_done)

@@ -137,7 +137,9 @@ class Database:
                    VALUES (:feed_url, :title, :author, :description, :image_url, :link)
                    ON CONFLICT(feed_url) DO UPDATE SET
                      title=excluded.title, author=excluded.author,
-                     description=excluded.description, image_url=excluded.image_url,
+                     description=excluded.description,
+                     image_url=CASE WHEN excluded.image_url != ''
+                                    THEN excluded.image_url ELSE podcasts.image_url END,
                      link=excluded.link""",
                 values,
             )

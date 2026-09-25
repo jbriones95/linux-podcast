@@ -37,10 +37,14 @@ class LibraryPage(Adw.NavigationPage):
         self._search_entry = Gtk.SearchEntry()
         self._search_entry.set_placeholder_text("Search library")
         self._search_entry.set_hexpand(True)
-        self._search_entry.set_focus_on_click(True)
-        # Keep GTK's initial focus traversal from opening the mobile keyboard.
-        # MainWindow enables this again after the window has been presented.
+        # Keep GTK traversal and Phosh from focusing the entry on startup. It
+        # becomes focusable only from the explicit tap handler below.
         self._search_entry.set_focusable(False)
+        self._search_entry.set_focus_on_click(False)
+        search_gesture = Gtk.GestureClick.new()
+        search_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        search_gesture.connect("pressed", self._on_search_pressed)
+        self._search_entry.add_controller(search_gesture)
         self._search_entry.connect("search-changed", lambda *_: self.refresh())
 
         tools = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -104,6 +108,15 @@ class LibraryPage(Adw.NavigationPage):
         toolbar.set_content(body)
         self.set_child(toolbar)
         GLib.idle_add(self.refresh)
+
+    def _on_search_pressed(self, _gesture, _n_press, _x, _y):
+        self._search_entry.set_focusable(True)
+        self._search_entry.grab_focus()
+
+    def reset_search_focus(self):
+        self._search_entry.set_focusable(False)
+        self._search_entry.set_focus_on_click(False)
+        self.initial_focus_target.grab_focus()
 
 
     def refresh(self):

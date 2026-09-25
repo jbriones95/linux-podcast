@@ -204,6 +204,22 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual([item[0].title for item in favorites], [selected.title])
             db.close()
 
+    def test_refresh_does_not_erase_existing_artwork(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            db.upsert_podcast(
+                {
+                    "feed_url": "https://example.test/feed.xml",
+                    "title": "Show",
+                    "image_url": "https://example.test/art.jpg",
+                }
+            )
+            db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show updated"}
+            )
+            self.assertEqual(db.podcasts()[0].image_url, "https://example.test/art.jpg")
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

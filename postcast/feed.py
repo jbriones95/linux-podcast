@@ -1,6 +1,7 @@
 import calendar
 import re
 from pathlib import Path
+from urllib.parse import urljoin
 
 import feedparser
 
@@ -35,17 +36,26 @@ def _clean(text):
     return text.strip()
 
 
-def _get_artwork(entry):
-    img = entry.get("image", {})
-    if isinstance(img, dict):
-        url = img.get("href") or img.get("url")
+def _image_value(value):
+    if isinstance(value, dict):
+        return value.get("href") or value.get("url") or value.get("href_url") or ""
+    return value if isinstance(value, str) else ""
+
+
+def _get_artwork(entry, base_url=""):
+    for value in (
+        entry.get("image", {}),
+        entry.get("itunes_image", {}),
+        entry.get("logo", ""),
+    ):
+        url = _image_value(value)
         if url:
-            return url
+            return urljoin(base_url, url)
     links = entry.get("links")
     if links:
         for link in links:
             if link.get("type", "").startswith("image/"):
-                return link.get("href", "")
+                return urljoin(base_url, link.get("href", ""))
     return ""
 
 
@@ -57,7 +67,7 @@ def fetch_feed(feed_url):
         raise FeedError(f"Could not parse feed: {exc}")
 
     feed = parsed.feed
-    image_url = _get_artwork(feed)
+    image_url = _get_artwork(feed, feed_url)
     podcast = {
         "feed_url": feed_url,
         "title": _clean(feed.get("title", "")) or feed_url,

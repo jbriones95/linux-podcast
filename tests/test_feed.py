@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from postcast.feed import _duration_to_seconds, fetch_feed
+from postcast.feed import _duration_to_seconds, _get_artwork, fetch_feed
 
 
 FEED = """<?xml version="1.0" encoding="UTF-8"?>
@@ -45,6 +45,12 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(episodes[0]["audio_url"], "https://example.test/episode.mp3")
         self.assertEqual(episodes[0]["duration_seconds"], 3723)
         self.assertGreater(episodes[0]["published"], 0)
+
+    def test_artwork_supports_itunes_image_and_relative_urls(self):
+        self.assertEqual(
+            _get_artwork({"itunes_image": {"href": "art.jpg"}}, "https://example.test/feed.xml"),
+            "https://example.test/art.jpg",
+        )
 
 
 if __name__ == "__main__":

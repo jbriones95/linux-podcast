@@ -107,6 +107,7 @@ class PostcastApplication(Adw.Application, GObject.Object):
             GLib.idle_add(self.window.finish_initial_focus_setup)
         else:
             self.window.present()
+            GLib.idle_add(self.window.finish_initial_focus_setup)
         if self._refresh_source is None:
             self._refresh_source = GLib.timeout_add_seconds(1800, self._scheduled_refresh)
             GLib.idle_add(self.refresh_feeds, True)

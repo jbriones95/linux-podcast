@@ -1,0 +1,76 @@
+name: debug-apk
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pmbootstrap + build toolchain
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/pmbvenv
+          source /tmp/pmbvenv/bin/activate
+          git clone -q --depth 1 \
+            https://gitlab.postmarketos.org/postMarketOS/pmbootstrap.git \
+            /tmp/pmbootstrap
+          pip install -q -e /tmp/pmbootstrap
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq git python3-pip patch pkgconf openssl \
+            rsync sudo qemu-user qemu-user-static binfmt-support
+          echo "export PATH=/tmp/pmbvenv/bin:$PATH" >> "$GITHUB_ENV"
+
+      - name: Stage package sources
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 https://gitlab.postmarketos.org/postMarketOS/pmaports.git /tmp/pmaports
+          mkdir -p /tmp/pmaports/testing/postcast
+          cp APKBUILD /tmp/pmaports/testing/postcast/APKBUILD
+          sed -i 's/^pkgrel=0/pkgrel=1/' /tmp/pmaports/testing/postcast/APKBUILD
+          cp data/io.postcast.Postcast.svg /tmp/pmaports/testing/postcast/
+          cp data/io.postcast.Postcast.desktop /tmp/pmaports/testing/postcast/
+          cp data/io.postcast.Postcast.metainfo.xml /tmp/pmaports/testing/postcast/
+          mkdir -p /tmp/postcast-src/postcast-0.2.4
+          cp -r postcast data setup.py /tmp/postcast-src/postcast-0.2.4/
+          tar -C /tmp/postcast-src -czf \
+            /tmp/pmaports/testing/postcast/postcast-0.2.4.tar.gz postcast-0.2.4
+
+      - name: Run tests and package checks
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q feedparser
+          python3 -m unittest discover -s tests -v
+          python3 -m compileall -q postcast
+
+      - name: Initialize pmbootstrap
+        run: |
+          set -euo pipefail
+          source /tmp/pmbvenv/bin/activate
+          set +o pipefail
+          yes '' | pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork init
+          init_status=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$init_status" -eq 0
+          pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork config aports /tmp/pmaports
+
+      - name: Build debug APK
+        run: |
+          set -euo pipefail
+          source /tmp/pmbvenv/bin/activate
+          cd /tmp/pmaports/testing/postcast
+          pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork checksum postcast
+          pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork \
+            build --arch aarch64 --force postcast
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postcast-debug-apk
+          path: /tmp/pmbwork/packages/**/*.apk

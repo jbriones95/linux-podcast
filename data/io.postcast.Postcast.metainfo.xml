@@ -7,7 +7,7 @@
     <p>Postcast is a GTK4 podcast player built for postmarketOS. Subscribe to podcasts by RSS, stream or download episodes, and keep progress across sessions.</p>
   </description>
   <releases>
-    <release version="0.1.2" date="2026-09-24">
+    <release version="0.1.3" date="2026-09-24">
       <description>
         <p>Initial release.</p>
       </description>

@@ -37,10 +37,10 @@ jobs:
           cp data/io.postcast.Postcast.svg /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.desktop /tmp/pmaports/testing/postcast/
           cp data/io.postcast.Postcast.metainfo.xml /tmp/pmaports/testing/postcast/
-          mkdir -p /tmp/postcast-src/postcast-0.1.2
-          cp -r postcast data setup.py /tmp/postcast-src/postcast-0.1.2/
+          mkdir -p /tmp/postcast-src/postcast-0.1.3
+          cp -r postcast data setup.py /tmp/postcast-src/postcast-0.1.3/
           tar -C /tmp/postcast-src -czf \
-            /tmp/pmaports/testing/postcast/postcast-0.1.2.tar.gz postcast-0.1.2
+            /tmp/pmaports/testing/postcast/postcast-0.1.3.tar.gz postcast-0.1.3
 
       - name: Set up ssh/gnupg for apk signing
         run: |

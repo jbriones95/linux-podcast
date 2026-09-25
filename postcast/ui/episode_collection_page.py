@@ -71,11 +71,10 @@ class EpisodeCollectionPage(Adw.NavigationPage):
                 heading.set_margin_top(14)
                 heading.set_margin_bottom(4)
                 heading.add_css_class("heading")
-                heading_row = Gtk.ListBoxRow()
-                heading_row.set_selectable(False)
-                heading_row.set_activatable(False)
-                heading_row.set_child(heading)
-                self._listbox.append(heading_row)
+                # Let Gtk.ListBox wrap the heading itself. Mixing manually
+                # nested ListBoxRow instances with episode rows can cause
+                # touch-device list rendering to collapse sibling rows.
+                self._listbox.append(heading)
             self._listbox.append(
                 EpisodeRow(self.window, episode, podcast, show_podcast=True)
             )

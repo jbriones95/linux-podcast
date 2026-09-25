@@ -142,11 +142,15 @@ class MainWindow(Adw.ApplicationWindow):
         return content
 
     def _on_section_toggled(self, button, name):
-        if button.get_active():
+        if button.get_active() and not getattr(self, "_switching_section", False):
             self.switch_section(name)
 
     def switch_section(self, name):
         nav, page = self._sections[name]
+        self._switching_section = True
+        for section, button in self._section_buttons.items():
+            button.set_active(section == name)
+        self._switching_section = False
         nav.pop_to_page(page)
         self.nav = nav
         self._section_stack.set_visible_child_name(name)

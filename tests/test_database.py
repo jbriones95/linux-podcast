@@ -185,6 +185,31 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual([item[1].title for item in recent], ["Two", "One"])
             db.close()
 
+    def test_recent_episodes_keeps_all_episodes_from_the_same_day(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            first = db.upsert_podcast(
+                {"feed_url": "https://example.test/one.xml", "title": "One"}
+            )
+            second = db.upsert_podcast(
+                {"feed_url": "https://example.test/two.xml", "title": "Two"}
+            )
+            timestamp = 1704067200
+            db.sync_episodes(
+                first,
+                [{"guid": "one", "title": "One episode", "audio_url": "https://example.test/one.mp3", "published": timestamp}],
+            )
+            db.sync_episodes(
+                second,
+                [{"guid": "two", "title": "Two episode", "audio_url": "https://example.test/two.mp3", "published": timestamp}],
+            )
+            self.assertEqual(len(db.recent_episodes()), 2)
+            self.assertEqual(
+                {item[0].title for item in db.recent_episodes()},
+                {"One episode", "Two episode"},
+            )
+            db.close()
+
     def test_favorite_episode_query_excludes_unfavorited_episodes(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "library.db")

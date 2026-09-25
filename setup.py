@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="postcast",
-    version="0.1.7",
+    version="0.1.8",
     description="A GTK4 podcast player for postmarketOS",
     packages=find_packages(include=["postcast", "postcast.*"]),
     package_data={"postcast": ["data/*"]},

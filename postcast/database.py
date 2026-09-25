@@ -382,6 +382,137 @@ class Database:
                    ORDER BY seconds DESC"""
             ).fetchall()
 
+    # ---- portable sync state ----
+    def export_sync_state(self):
+        """Return mergeable library state without machine-specific file paths."""
+        with self._lock:
+            podcasts = [dict(row) for row in self.conn.execute("SELECT * FROM podcasts")]
+            episodes = []
+            for row in self.conn.execute(
+                """SELECT e.*, p.feed_url FROM episodes e
+                   JOIN podcasts p ON p.id=e.podcast_id"""
+            ):
+                item = dict(row)
+                item.pop("id", None)
+                item.pop("podcast_id", None)
+                item.pop("downloaded_path", None)
+                episodes.append(item)
+            queue = [
+                dict(row)
+                for row in self.conn.execute(
+                    """SELECT p.feed_url, e.guid, q.position
+                       FROM queue q JOIN episodes e ON e.id=q.episode_id
+                       JOIN podcasts p ON p.id=e.podcast_id
+                       ORDER BY q.position, q.id"""
+                )
+            ]
+            listening = []
+            for row in self.conn.execute(
+                """SELECT p.feed_url, e.guid, s.seconds, s.completed, s.last_played
+                   FROM listening_stats s JOIN episodes e ON e.id=s.episode_id
+                   JOIN podcasts p ON p.id=e.podcast_id"""
+            ):
+                listening.append(dict(row))
+            settings = {
+                key: self.get_setting(key)
+                for key in ("playback_rate", "playback_volume")
+                if self.get_setting(key) is not None
+            }
+            return {
+                "version": 1,
+                "podcasts": podcasts,
+                "episodes": episodes,
+                "queue": queue,
+                "listening": listening,
+                "settings": settings,
+            }
+
+    def import_sync_state(self, state):
+        """Merge portable state, retaining local downloaded file paths."""
+        with self._lock:
+            podcast_ids = {}
+            for podcast in state.get("podcasts", []):
+                podcast_ids[podcast["feed_url"]] = self.upsert_podcast(podcast)
+
+            episode_ids = {}
+            for episode in state.get("episodes", []):
+                podcast_id = podcast_ids.get(episode.get("feed_url"))
+                if podcast_id is None:
+                    continue
+                guid = episode.get("guid") or episode.get("audio_url", "")
+                existing = self.conn.execute(
+                    "SELECT id, played, favorite, position_seconds FROM episodes "
+                    "WHERE podcast_id=? AND guid=?",
+                    (podcast_id, guid),
+                ).fetchone()
+                if existing is None:
+                    self.conn.execute(
+                        """INSERT INTO episodes
+                           (podcast_id, guid, title, description, audio_url,
+                            duration_seconds, published, played, favorite, position_seconds)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            podcast_id,
+                            guid,
+                            episode.get("title", ""),
+                            episode.get("description", ""),
+                            episode.get("audio_url", ""),
+                            int(episode.get("duration_seconds") or 0),
+                            episode.get("published"),
+                            int(episode.get("played") or 0),
+                            int(episode.get("favorite") or 0),
+                            int(episode.get("position_seconds") or 0),
+                        ),
+                    )
+                else:
+                    self.conn.execute(
+                        """UPDATE episodes SET
+                           played=MAX(played, ?), favorite=MAX(favorite, ?),
+                           position_seconds=MAX(position_seconds, ?)
+                           WHERE id=?""",
+                        (
+                            int(episode.get("played") or 0),
+                            int(episode.get("favorite") or 0),
+                            int(episode.get("position_seconds") or 0),
+                            existing["id"],
+                        ),
+                    )
+                row = self.conn.execute(
+                    "SELECT id FROM episodes WHERE podcast_id=? AND guid=?",
+                    (podcast_id, guid),
+                ).fetchone()
+                episode_ids[(episode.get("feed_url"), guid)] = row["id"]
+
+            for item in state.get("queue", []):
+                episode_id = episode_ids.get((item.get("feed_url"), item.get("guid")))
+                if episode_id is not None:
+                    self.conn.execute(
+                        "INSERT OR IGNORE INTO queue(episode_id, position, added_at) VALUES (?, ?, ?)",
+                        (episode_id, int(item.get("position") or 0), int(time.time())),
+                    )
+
+            for item in state.get("listening", []):
+                episode_id = episode_ids.get((item.get("feed_url"), item.get("guid")))
+                if episode_id is not None:
+                    self.conn.execute(
+                        """INSERT INTO listening_stats(episode_id, seconds, completed, last_played)
+                           VALUES (?, ?, ?, ?)
+                           ON CONFLICT(episode_id) DO UPDATE SET
+                             seconds=MAX(listening_stats.seconds, excluded.seconds),
+                             completed=MAX(listening_stats.completed, excluded.completed),
+                             last_played=MAX(listening_stats.last_played, excluded.last_played)""",
+                        (
+                            episode_id,
+                            int(item.get("seconds") or 0),
+                            int(item.get("completed") or 0),
+                            int(item.get("last_played") or 0),
+                        ),
+                    )
+            for key, value in state.get("settings", {}).items():
+                self.set_setting(key, value)
+            self.conn.commit()
+            return len(episode_ids)
+
     def set_position(self, episode_id, position_seconds):
         with self._lock:
             self.conn.execute(

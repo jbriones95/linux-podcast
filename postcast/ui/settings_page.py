@@ -55,7 +55,7 @@ class SettingsPage(Adw.NavigationPage):
 
         backup = Adw.PreferencesGroup()
         backup.set_title("Backup and migration")
-        backup.set_description("Export or import subscriptions as an OPML file.")
+        backup.set_description("Move subscriptions and playback state between devices.")
         opml_path = data_dir() / "subscriptions.opml"
         export_row = Adw.ActionRow()
         export_row.set_title("Export subscriptions")
@@ -75,6 +75,31 @@ class SettingsPage(Adw.NavigationPage):
         import_btn.connect("clicked", lambda *_: self.window.import_opml(opml_path))
         import_row.add_suffix(import_btn)
         backup.add(import_row)
+
+        sync_path = data_dir() / "library-sync.json"
+        export_state_row = Adw.ActionRow()
+        export_state_row.set_title("Export library state")
+        export_state_row.set_subtitle(str(sync_path))
+        export_state_btn = Gtk.Button(label="Export")
+        export_state_btn.add_css_class("flat")
+        export_state_btn.set_valign(Gtk.Align.CENTER)
+        export_state_btn.connect(
+            "clicked", lambda *_: self.window.export_library(sync_path)
+        )
+        export_state_row.add_suffix(export_state_btn)
+        backup.add(export_state_row)
+
+        import_state_row = Adw.ActionRow()
+        import_state_row.set_title("Merge library state")
+        import_state_row.set_subtitle("Merge the JSON file at the path above")
+        import_state_btn = Gtk.Button(label="Merge")
+        import_state_btn.add_css_class("flat")
+        import_state_btn.set_valign(Gtk.Align.CENTER)
+        import_state_btn.connect(
+            "clicked", lambda *_: self.window.import_library(sync_path)
+        )
+        import_state_row.add_suffix(import_state_btn)
+        backup.add(import_state_row)
         pref.add(backup)
 
         stats = Adw.PreferencesGroup()
@@ -101,7 +126,7 @@ class SettingsPage(Adw.NavigationPage):
         about_row = Gtk.Button(label="About")
         about_row.add_css_class("flat")
         about_row.set_valign(Gtk.Align.CENTER)
-        about_row.connect("clicked", self._show_about)
+        about_row.connect("clicked", lambda *_: self.window.open_about())
         about_btn_row.add_suffix(about_row)
         about.add(about_btn_row)
 
@@ -147,13 +172,3 @@ class SettingsPage(Adw.NavigationPage):
     def _export_opml(self, path):
         export_opml(self.app.db, path)
         self.window.toast(f"Subscriptions exported to {path}.")
-
-    def _show_about(self, *args):
-        about = Adw.AboutWindow.new()
-        about.set_application_icon("io.postcast.Postcast")
-        about.set_application_name("Postcast")
-        about.set_version(APP_VERSION)
-        about.set_comments("Podcast player for postmarketOS")
-        about.set_license_type(Gtk.License.GPL_3_0)
-        about.set_transient_for(self.window)
-        about.present()

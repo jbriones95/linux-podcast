@@ -168,6 +168,25 @@ class Playback:
         self.play_episode(nxt[0], nxt[1])
         return True
 
+    def play_previous(self):
+        """Restart the current episode or play the previous queue item."""
+        position, _duration = self.player.position()
+        if position > 5:
+            self.player.seek(0)
+            return True
+        if self._queue and self._queue_index > 0:
+            podcast, episode = self._queue[self._queue_index - 1]
+            self._queue_index -= 1
+            self.play_episode(podcast, episode)
+            return True
+        if self._fallback_queue and self._fallback_index > 0:
+            podcast, episode = self._fallback_queue[self._fallback_index - 1]
+            self._fallback_index -= 1
+            self.play_episode(podcast, episode)
+            return True
+        self.player.seek(0)
+        return True
+
     def current_episode(self):
         return self.episode
 

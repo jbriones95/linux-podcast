@@ -41,6 +41,7 @@ class PostcastApplication(Adw.Application, GObject.Object):
         self.window = None
         self._refresh_source = None
         self._refresh_thread = None
+        self._mpris = None
 
     @property
     def db(self):
@@ -91,6 +92,12 @@ class PostcastApplication(Adw.Application, GObject.Object):
             self._downloads.directory = pathlib.Path(path)
 
     # ---------- lifecycle ----------
+    def do_startup(self):
+        super().do_startup()
+        from .mpris import MprisService
+
+        self._mpris = MprisService(self)
+
     def do_activate(self):
         if self.window is None:
             self.window = MainWindow(application=self)
@@ -138,6 +145,9 @@ class PostcastApplication(Adw.Application, GObject.Object):
         return False
 
     def do_shutdown(self):
+        if self._mpris is not None:
+            self._mpris.stop()
+            self._mpris = None
         if self._refresh_source is not None:
             GLib.source_remove(self._refresh_source)
             self._refresh_source = None

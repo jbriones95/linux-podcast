@@ -27,6 +27,8 @@ Built with Python + GObject/Gtk, Libadwaita, and GStreamer.
 - Automatic feed refresh and new-episode notifications
 - OPML subscription backup and restore
 - Listening statistics
+- MPRIS controls for media keys, headsets, and Phosh
+- Mergeable library-state export for moving between devices
 
 ## Running locally (desktop)
 

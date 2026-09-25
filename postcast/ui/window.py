@@ -9,6 +9,7 @@ from gi.repository import Adw, Gtk, GLib
 
 from ..feed import FeedError, fetch_feed
 from ..interop import import_opml
+from ..sync import export_library, import_library
 from ..search import search_podcasts
 from ..ui.library_page import LibraryPage
 from ..ui.podcast_page import PodcastPage
@@ -18,6 +19,7 @@ from ..ui.episode_page import EpisodePage
 from ..ui.now_playing_page import NowPlayingPage
 from ..ui.queue_page import QueuePage
 from ..ui.statistics_page import StatisticsPage
+from ..ui.about_page import AboutPage
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -97,6 +99,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def open_statistics(self):
         self.nav.push(StatisticsPage(self))
+
+    def open_about(self):
+        self.nav.push(AboutPage(self))
 
     def add_dialog(self):
         entry = Gtk.Entry(placeholder_text="https://…/feed.xml")
@@ -223,6 +228,24 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.idle_add(self._opml_imported, imported)
 
         threading.Thread(target=work, daemon=True, name="postcast-opml-import").start()
+
+    def export_library(self, path):
+        try:
+            export_library(self.app.db, path)
+            self.toast(f"Library exported to {path}.")
+        except Exception as exc:
+            self.toast(f"Could not export library: {exc}")
+
+    def import_library(self, path):
+        try:
+            count = import_library(self.app.db, path)
+        except Exception as exc:
+            self.toast(f"Could not import library: {exc}")
+            return
+        self.app.playback._load_queue()
+        self.app.refresh_library()
+        self.library.refresh()
+        self.toast(f"Merged {count} episode{'s' if count != 1 else ''}.")
 
     def _opml_imported(self, count):
         self.app.refresh_library()

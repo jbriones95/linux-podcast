@@ -37,17 +37,8 @@ class LibraryPage(Adw.NavigationPage):
         self._search_entry = Gtk.SearchEntry()
         self._search_entry.set_placeholder_text("Search library")
         self._search_entry.set_hexpand(True)
+        self._search_entry.set_focus_on_click(True)
         self._search_entry.connect("search-changed", lambda *_: self.refresh())
-
-        self._favorite_filter = Gtk.ToggleButton()
-        self._favorite_filter.set_label("Favorites")
-        self._favorite_filter.set_tooltip_text("Show favorites")
-        self._favorite_filter.connect("toggled", lambda *_: self.refresh())
-
-        self._unplayed_filter = Gtk.ToggleButton()
-        self._unplayed_filter.set_label("Unplayed")
-        self._unplayed_filter.set_tooltip_text("Show unplayed episodes")
-        self._unplayed_filter.connect("toggled", lambda *_: self.refresh())
 
         tools = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         tools.set_margin_start(12)
@@ -56,22 +47,25 @@ class LibraryPage(Adw.NavigationPage):
         tools.set_margin_bottom(4)
         tools.append(self._search_entry)
 
-        filters = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        filters.set_margin_start(12)
-        filters.set_margin_end(12)
-        filters.set_margin_bottom(8)
-        filters.append(self._favorite_filter)
-        filters.append(self._unplayed_filter)
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        actions.set_margin_start(12)
+        actions.set_margin_end(12)
+        actions.set_margin_bottom(8)
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
         refresh_btn.set_tooltip_text("Refresh all feeds")
         refresh_btn.set_size_request(44, 44)
         refresh_btn.connect("clicked", lambda *_: self._refresh_all())
-        filters.append(refresh_btn)
+        actions.append(refresh_btn)
         queue_btn = Gtk.Button(icon_name="view-list-symbolic")
         queue_btn.set_tooltip_text("Playback queue")
         queue_btn.set_size_request(44, 44)
         queue_btn.connect("clicked", lambda *_: window.open_queue())
-        filters.append(queue_btn)
+        actions.append(queue_btn)
+        sync_btn = Gtk.Button(icon_name="document-save-symbolic")
+        sync_btn.set_tooltip_text("Backup and sync library")
+        sync_btn.set_size_request(44, 44)
+        sync_btn.connect("clicked", lambda *_: window.open_settings())
+        actions.append(sync_btn)
 
         self._listbox = Gtk.ListBox()
         self._listbox.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -100,23 +94,26 @@ class LibraryPage(Adw.NavigationPage):
 
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         body.append(tools)
-        body.append(filters)
+        body.append(actions)
         body.append(stack)
         toolbar.set_content(body)
         self.set_child(toolbar)
-        GLib.idle_add(self.refresh)
+        GLib.idle_add(self._initial_refresh)
+
+    def _initial_refresh(self):
+        self.refresh()
+        # Do not let the first text-entry widget claim focus and open the
+        # on-screen keyboard when the app launches.
+        self._listbox.grab_focus()
+        return GLib.SOURCE_REMOVE
 
     def refresh(self):
         while (row := self._listbox.get_first_child()) is not None:
             self._listbox.remove(row)
 
         query = self._search_entry.get_text().strip()
-        favorites_only = self._favorite_filter.get_active()
-        unplayed_only = self._unplayed_filter.get_active()
-        if query or favorites_only or unplayed_only:
-            results = self.app.db.search_episodes(
-                query, favorites_only=favorites_only, unplayed_only=unplayed_only
-            )
+        if query:
+            results = self.app.db.search_episodes(query)
             if not results:
                 self._status.set_title("No matching episodes")
                 self._status.set_description("Try a different search or filter.")

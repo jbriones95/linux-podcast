@@ -27,7 +27,7 @@ def format_date(published):
 class EpisodeRow(Gtk.ListBoxRow):
     """A single episode row with play + download actions."""
 
-    def __init__(self, window, episode: Episode, podcast=None):
+    def __init__(self, window, episode: Episode, podcast=None, show_podcast=False):
         super().__init__()
         self.window = window
         self.app = window.app
@@ -53,9 +53,10 @@ class EpisodeRow(Gtk.ListBoxRow):
         self.title.set_xalign(0)
         self.title.add_css_class("title-2")
 
-        self.meta = Gtk.Label(
-            label=f"{format_date(episode.published)} · {format_duration(episode.duration_seconds)}"
-        )
+        meta_parts = [format_date(episode.published), format_duration(episode.duration_seconds)]
+        if show_podcast and podcast:
+            meta_parts.insert(0, podcast.title or "Unknown show")
+        self.meta = Gtk.Label(label=" · ".join(meta_parts))
         self.meta.set_xalign(0)
         self.meta.add_css_class("dim-label")
 

@@ -4,7 +4,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gtk
 
-from .episode_row import EpisodeRow
+from .episode_row import EpisodeRow, format_date
 
 
 class EpisodeCollectionPage(Adw.NavigationPage):
@@ -12,7 +12,7 @@ class EpisodeCollectionPage(Adw.NavigationPage):
 
     def __init__(self, window, mode):
         self.mode = mode
-        title = "New" if mode == "new" else "Favorites"
+        title = "New episodes" if mode == "new" else "Favorites"
         super().__init__(title=title)
         self.window = window
         self.app = window.app
@@ -59,8 +59,26 @@ class EpisodeCollectionPage(Adw.NavigationPage):
             self._stack.set_visible_child_name("empty")
             return
         self._stack.set_visible_child_name("list")
+        current_date = None
         for episode, podcast in results:
-            self._listbox.append(EpisodeRow(self.window, episode, podcast))
+            date = format_date(episode.published)
+            if date != current_date:
+                current_date = date
+                heading = Gtk.Label(label=date)
+                heading.set_xalign(0)
+                heading.set_margin_start(16)
+                heading.set_margin_end(16)
+                heading.set_margin_top(14)
+                heading.set_margin_bottom(4)
+                heading.add_css_class("heading")
+                heading_row = Gtk.ListBoxRow()
+                heading_row.set_selectable(False)
+                heading_row.set_activatable(False)
+                heading_row.set_child(heading)
+                self._listbox.append(heading_row)
+            self._listbox.append(
+                EpisodeRow(self.window, episode, podcast, show_podcast=True)
+            )
 
     def _on_row_activated(self, _listbox, row):
         if isinstance(row, EpisodeRow):

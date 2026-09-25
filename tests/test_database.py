@@ -185,6 +185,25 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual([item[1].title for item in recent], ["Two", "One"])
             db.close()
 
+    def test_favorite_episode_query_excludes_unfavorited_episodes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            podcast_id = db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show"}
+            )
+            db.sync_episodes(
+                podcast_id,
+                [
+                    {"guid": "one", "title": "One", "audio_url": "https://example.test/one.mp3"},
+                    {"guid": "two", "title": "Two", "audio_url": "https://example.test/two.mp3"},
+                ],
+            )
+            selected = db.episodes(podcast_id)[0]
+            db.set_favorite(selected.id, True)
+            favorites = db.search_episodes(favorites_only=True)
+            self.assertEqual([item[0].title for item in favorites], [selected.title])
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,7 @@
 # Contributor: Jose Briones <thedumbphoneshow@gmail.com>
 
 pkgname=postcast
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=0
 pkgdesc="GTK4 podcast manager for postmarketOS"
 url="https://github.com/jbriones95/linux-podcast"

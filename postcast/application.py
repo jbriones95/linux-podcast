@@ -93,7 +93,9 @@ class PostcastApplication(Adw.Application, GObject.Object):
 
     # ---------- lifecycle ----------
     def do_startup(self):
-        super().do_startup()
+        # Explicit dispatch is required by the PyGObject bindings shipped on
+        # postmarketOS; bound super() dispatch loses the application argument.
+        Adw.Application.do_startup(self)
         from .mpris import MprisService
 
         self._mpris = MprisService(self)
@@ -159,7 +161,7 @@ class PostcastApplication(Adw.Application, GObject.Object):
             self._downloads.shutdown()
         if self._db is not None:
             self._db.close()
-        super().do_shutdown()
+        Adw.Application.do_shutdown(self)
 
     # ---------- download toggle ----------
     def download_toggle(self, episode):

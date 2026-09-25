@@ -22,6 +22,7 @@ Built with Python + GObject/Gtk, Libadwaita, and GStreamer.
 - Search and filter episodes in the local library
 - Playback speed, skip controls, volume, and sleep timer
 - Delete individual downloaded episodes
+- Persistent cross-podcast playback queue
 
 ## Running locally (desktop)
 

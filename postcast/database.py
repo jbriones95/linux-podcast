@@ -1,11 +1,12 @@
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 from .config import db_path
 from .models import Episode, Podcast
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS podcasts (
@@ -81,6 +82,21 @@ class Database:
                 )
             self.conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_episodes_favorite ON episodes(favorite)"
+            )
+            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            self.conn.commit()
+
+        if current < 3:
+            self.conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    episode_id INTEGER NOT NULL UNIQUE REFERENCES episodes(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    added_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_queue_position ON queue(position, id);
+                """
             )
             self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.conn.commit()
@@ -254,6 +270,67 @@ class Database:
                 "UPDATE episodes SET favorite=? WHERE id=?",
                 (1 if favorite else 0, episode_id),
             )
+            self.conn.commit()
+
+    # ---- playback queue ----
+    def queue_items(self):
+        with self._lock:
+            rows = self.conn.execute(
+                """SELECT e.*, p.id AS result_podcast_id,
+                           p.feed_url AS result_feed_url, p.title AS result_podcast_title,
+                           p.author AS result_podcast_author, p.description AS result_podcast_description,
+                           p.image_url AS result_podcast_image_url, p.link AS result_podcast_link
+                    FROM queue q
+                    JOIN episodes e ON e.id = q.episode_id
+                    JOIN podcasts p ON p.id = e.podcast_id
+                    ORDER BY q.position, q.id"""
+            ).fetchall()
+            results = []
+            for row in rows:
+                results.append(
+                    (
+                        Episode.from_row(row),
+                        Podcast(
+                            id=row["result_podcast_id"],
+                            feed_url=row["result_feed_url"],
+                            title=row["result_podcast_title"] or "",
+                            author=row["result_podcast_author"] or "",
+                            description=row["result_podcast_description"] or "",
+                            image_url=row["result_podcast_image_url"] or "",
+                            link=row["result_podcast_link"] or "",
+                        ),
+                    )
+                )
+            return results
+
+    def is_queued(self, episode_id):
+        with self._lock:
+            return self.conn.execute(
+                "SELECT 1 FROM queue WHERE episode_id=?", (episode_id,)
+            ).fetchone() is not None
+
+    def add_to_queue(self, episode_id):
+        with self._lock:
+            if self.is_queued(episode_id):
+                return False
+            position = self.conn.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM queue"
+            ).fetchone()[0]
+            self.conn.execute(
+                "INSERT INTO queue(episode_id, position, added_at) VALUES (?, ?, ?)",
+                (episode_id, position, int(time.time())),
+            )
+            self.conn.commit()
+            return True
+
+    def remove_from_queue(self, episode_id):
+        with self._lock:
+            self.conn.execute("DELETE FROM queue WHERE episode_id=?", (episode_id,))
+            self.conn.commit()
+
+    def clear_queue(self):
+        with self._lock:
+            self.conn.execute("DELETE FROM queue")
             self.conn.commit()
 
     def set_position(self, episode_id, position_seconds):

@@ -76,6 +76,12 @@ class EpisodeRow(Gtk.ListBoxRow):
         self.played_btn.connect("clicked", self._on_played)
         box.append(self.played_btn)
 
+        self.queue_btn = Gtk.Button()
+        self.queue_btn.add_css_class("flat")
+        self.queue_btn.set_valign(Gtk.Align.CENTER)
+        self.queue_btn.connect("clicked", self._on_queue)
+        box.append(self.queue_btn)
+
         # download button
         self.download_btn = Gtk.Button()
         self.download_btn.set_icon_name("folder-download-symbolic")
@@ -100,6 +106,7 @@ class EpisodeRow(Gtk.ListBoxRow):
         self._update_download_icon()
         self._update_play_icon()
         self._update_state_icons()
+        self._update_queue_icon()
 
     def rerender(self, episode):
         if episode is None:
@@ -127,6 +134,21 @@ class EpisodeRow(Gtk.ListBoxRow):
 
     def _on_played(self, *args):
         self.app.toggle_played(self.episode)
+
+    def _on_queue(self, *args):
+        if self.app.playback.is_queued(self.episode):
+            self.app.playback.remove_from_queue(self.episode)
+        elif self.podcast:
+            self.app.playback.add_to_queue(self.podcast, self.episode)
+        self._update_queue_icon()
+
+    def _update_queue_icon(self):
+        if self.app.playback.is_queued(self.episode):
+            self.queue_btn.set_icon_name("list-remove-symbolic")
+            self.queue_btn.set_tooltip_text("Remove from queue")
+        else:
+            self.queue_btn.set_icon_name("list-add-symbolic")
+            self.queue_btn.set_tooltip_text("Add to queue")
 
     # ---- state ----
     def update_download_state(self, downloading=False, progress=None):

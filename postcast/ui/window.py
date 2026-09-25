@@ -15,6 +15,7 @@ from ..ui.search_page import SearchPage
 from ..ui.settings_page import SettingsPage
 from ..ui.episode_page import EpisodePage
 from ..ui.now_playing_page import NowPlayingPage
+from ..ui.queue_page import QueuePage
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -54,8 +55,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._refresh_rows()
 
     def play_episode(self, episode, podcast):
-        queue = self.app.db.episodes(podcast.id)
-        self.app.playback.play_episode(podcast, episode, queue)
+        self.app.playback.play_episode(podcast, episode)
         self._refresh_rows()
 
     def is_current(self, episode_id):
@@ -84,6 +84,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast("Nothing is playing.")
             return
         self.nav.push(NowPlayingPage(self))
+
+    def open_queue(self):
+        self.nav.push(QueuePage(self))
 
     def add_dialog(self):
         entry = Gtk.Entry(placeholder_text="https://…/feed.xml")
@@ -231,6 +234,8 @@ class MainWindow(Adw.ApplicationWindow):
         elif isinstance(page, PodcastPage):
             page.rebuild()
         elif isinstance(page, EpisodePage):
+            page.refresh()
+        elif isinstance(page, QueuePage):
             page.refresh()
 
     def delete_episode_audio(self, episode_id):

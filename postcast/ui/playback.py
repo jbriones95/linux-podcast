@@ -15,12 +15,15 @@ class Playback:
         self.player = player
         self.podcast = None
         self.episode = None
-        self._queue = []      # Episode objects
+        self._queue = []      # (Podcast, Episode) pairs persisted in the database
         self._queue_index = -1
+        self._fallback_queue = []
+        self._fallback_index = -1
         self._sleep_source = None
         self._rate = float(self.db.get_setting("playback_rate", 1.0))
         self._volume = float(self.db.get_setting("playback_volume", 1.0))
         self.player.set_volume(self._volume)
+        self._load_queue()
 
         player.connect("position", self._on_position)
         player.connect("progress", self._on_progress)
@@ -33,8 +36,15 @@ class Playback:
         self.podcast = podcast
         self.episode = episode
         if queue is not None:
-            self._queue = queue
-            self._queue_index = self._index_of(episode.id)
+            self._fallback_queue = [(podcast, item) for item in queue]
+            self._fallback_index = self._index_of(episode.id, self._fallback_queue)
+        else:
+            self._load_queue()
+            self._fallback_queue = [
+                (podcast, item) for item in self.db.episodes(podcast.id)
+            ]
+            self._fallback_index = self._index_of(episode.id, self._fallback_queue)
+            self._queue_index = self._index_of(episode.id, self._queue)
 
     def toggle(self):
         self.player.toggle()
@@ -54,6 +64,25 @@ class Playback:
     def stop(self):
         self._save_position()
         self.player.stop()
+
+    def add_to_queue(self, podcast, episode):
+        if self.db.add_to_queue(episode.id):
+            self._load_queue()
+            self.app.toast("Added to queue.")
+        else:
+            self.app.toast("Already in queue.")
+
+    def remove_from_queue(self, episode):
+        self.db.remove_from_queue(episode.id)
+        self._load_queue()
+
+    def is_queued(self, episode):
+        return self.db.is_queued(episode.id)
+
+    def _load_queue(self):
+        self._queue = self.db.queue_items()
+        if self.episode:
+            self._queue_index = self._index_of(self.episode.id, self._queue)
 
     def _save_position(self):
         if self.episode:
@@ -121,42 +150,54 @@ class Playback:
         self.player.play()
 
     def play_next(self):
-        if not self.episode or not self._queue:
+        if not self.episode:
             return False
         nxt = self._next_item()
         if nxt is None:
             self.app.toast("End of list (nothing unplayed left).")
             return False
-        self.play_episode(self.podcast, nxt, self._queue)
+        self.play_episode(nxt[0], nxt[1])
         return True
 
     def current_episode(self):
         return self.episode
 
     # ---------- internals ----------
-    def _index_of(self, episode_id):
-        for i, e in enumerate(self._queue):
-            if e.id == episode_id:
+    def _index_of(self, episode_id, queue):
+        for i, item in enumerate(queue):
+            if item[1].id == episode_id:
                 return i
         return -1
 
     def _next_item(self):
-        if not self._queue:
+        queue = self._queue
+        index = self._queue_index
+        if queue:
+            if index < 0:
+                return queue[0]
+            if index + 1 < len(queue):
+                self._queue_index = index + 1
+                return queue[self._queue_index]
             return None
-        n = len(self._queue)
-        start = self._queue_index + 1
+
+        queue = self._fallback_queue
+        if not queue:
+            return None
+        n = len(queue)
+        start = self._fallback_index + 1
         # first unplayed episode after the current one, wrapping around
         for i in range(start, start + n):
-            e = self._queue[i % n]
+            e = queue[i % n][1]
             if e.id != self.episode.id and not e.played:
-                self._queue_index = i % n
-                return e
+                self._fallback_index = i % n
+                return queue[self._fallback_index]
         # nothing unplayed left: just advance in queue order
-        nxt = self._queue[(self._queue_index + 1) % n]
+        next_index = (self._fallback_index + 1) % n
+        nxt = queue[next_index][1]
         if nxt.id == self.episode.id:
             return None
-        self._queue_index = (self._queue_index + 1) % n
-        return nxt
+        self._fallback_index = next_index
+        return queue[next_index]
 
     # ---------- callbacks ----------
     def _on_position(self, pos, dur):

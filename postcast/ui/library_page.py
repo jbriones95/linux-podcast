@@ -30,6 +30,11 @@ class LibraryPage(Adw.NavigationPage):
         refresh_btn.connect("clicked", lambda *_: self._refresh_all())
         header.pack_end(refresh_btn)
 
+        queue_btn = Gtk.Button(icon_name="view-list-symbolic")
+        queue_btn.set_tooltip_text("Playback queue")
+        queue_btn.connect("clicked", lambda *_: window.open_queue())
+        header.pack_end(queue_btn)
+
         add_btn = Gtk.Button(icon_name="list-add-symbolic")
         add_btn.set_tooltip_text("Add podcast by URL")
         add_btn.connect("clicked", lambda *_: window.add_dialog())

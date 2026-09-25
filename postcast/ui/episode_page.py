@@ -66,6 +66,9 @@ class EpisodePage(Adw.NavigationPage):
         self.played = Gtk.Button()
         self.played.connect("clicked", self._on_played)
         actions.append(self.played)
+        self.queue = Gtk.Button()
+        self.queue.connect("clicked", self._on_queue)
+        actions.append(self.queue)
         self._update_action_labels()
         content.append(actions)
 
@@ -85,6 +88,11 @@ class EpisodePage(Adw.NavigationPage):
         self.download.set_label("Delete download" if self.episode.is_downloaded else "Download")
         self.favorite.set_label("Unfavorite" if self.episode.favorite else "Favorite")
         self.played.set_label("Mark unplayed" if self.episode.played else "Mark played")
+        self.queue.set_label(
+            "Remove from queue"
+            if self.app.playback.is_queued(self.episode)
+            else "Add to queue"
+        )
 
     def _on_download(self, *args):
         if self.episode.is_downloaded:
@@ -102,6 +110,13 @@ class EpisodePage(Adw.NavigationPage):
     def _on_played(self, *args):
         self.app.toggle_played(self.episode)
         self.episode = self.app.db.episode(self.episode.id)
+        self._update_action_labels()
+
+    def _on_queue(self, *args):
+        if self.app.playback.is_queued(self.episode):
+            self.app.playback.remove_from_queue(self.episode)
+        else:
+            self.app.playback.add_to_queue(self.podcast, self.episode)
         self._update_action_labels()
 
     def refresh(self):

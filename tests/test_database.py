@@ -106,6 +106,30 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(db.conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
             db.close()
 
+    def test_queue_is_persistent_and_deduplicated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            podcast_id = db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show"}
+            )
+            db.sync_episodes(
+                podcast_id,
+                [
+                    {"guid": "one", "title": "One", "audio_url": "https://example.test/one.mp3"},
+                    {"guid": "two", "title": "Two", "audio_url": "https://example.test/two.mp3"},
+                ],
+            )
+            episodes = db.episodes(podcast_id)
+            self.assertTrue(db.add_to_queue(episodes[0].id))
+            self.assertFalse(db.add_to_queue(episodes[0].id))
+            self.assertTrue(db.add_to_queue(episodes[1].id))
+            self.assertEqual([item[0].id for item in db.queue_items()], [episodes[0].id, episodes[1].id])
+            db.remove_from_queue(episodes[0].id)
+            self.assertEqual([item[0].id for item in db.queue_items()], [episodes[1].id])
+            db.clear_queue()
+            self.assertEqual(db.queue_items(), [])
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

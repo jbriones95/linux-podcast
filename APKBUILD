@@ -42,5 +42,5 @@ LAUNCH
 }
 
 sha512sums="
-PLACEHOLDER
+3bfdffafae058de5a5a947188d954e72e2de6025750ce664fed6fb6648542eaecfcec1f5b10efb5d7f495b93f5df29a373ff48e1d658f9c60db438babff5db8e  postcast-0.2.5.tar.gz
 "

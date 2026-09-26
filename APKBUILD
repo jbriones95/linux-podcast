@@ -1,18 +1,16 @@
-# Maintainer: Jose Briones <thedumbphoneshow@gmail.com>
-# Contributor: Jose Briones <thedumbphoneshow@gmail.com>
-
+maintainer="Jose Briones <thedumbphoneshow@gmail.com>"
 pkgname=postcast
-pkgver=0.2.4
+pkgver=0.2.5
 pkgrel=0
 pkgdesc="GTK4 podcast manager for postmarketOS"
 url="https://github.com/jbriones95/linux-podcast"
 arch="all"
 license="GPL-3.0-or-later"
-depends="python3 py3-gobject3 py3-feedparser gstreamer gst-plugins-base gst-plugins-good"
+depends="python3 py3-gobject3 py3-feedparser gtk4.0 libadwaita glib-networking ca-certificates gstreamer gst-plugins-base gst-plugins-good gst-libav"
 makedepends="py3-setuptools"
 options="!check"
-source="postcast-$pkgver.tar.gz"
-builddir="$srcdir/postcast-$pkgver"
+source="postcast-$pkgver.tar.gz::https://github.com/jbriones95/linux-podcast/archive/refs/tags/v$pkgver.tar.gz"
+builddir="$srcdir/linux-podcast-$pkgver"
 
 build() {
 	python3 setup.py build
@@ -42,3 +40,7 @@ LAUNCH
 	install -Dm644 "$builddir/data/io.postcast.Postcast.svg" \
 		"$pkgdir/usr/share/icons/hicolor/scalable/apps/io.postcast.Postcast.svg"
 }
+
+sha512sums="
+PLACEHOLDER
+"

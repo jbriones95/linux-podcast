@@ -1,7 +1,7 @@
 import calendar
 import re
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import feedparser
 
@@ -10,6 +10,27 @@ from .config import USER_AGENT
 
 class FeedError(Exception):
     pass
+
+
+def normalize_feed_url(value):
+    """Return a canonical HTTP(S) feed URL or raise ValueError."""
+    value = (value or "").strip()
+    parts = urlsplit(value)
+    scheme = parts.scheme.lower()
+    if scheme not in ("http", "https") or not parts.netloc:
+        raise ValueError("Enter a valid http(s) RSS feed URL.")
+    if parts.username or parts.password:
+        raise ValueError("RSS feed URLs cannot include credentials.")
+    hostname = parts.hostname.lower() if parts.hostname else ""
+    try:
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("Enter a valid http(s) RSS feed URL.") from exc
+    netloc = hostname
+    if port is not None and not ((scheme == "http" and port == 80) or
+                                 (scheme == "https" and port == 443)):
+        netloc = f"{netloc}:{port}"
+    return urlunsplit((scheme, netloc, parts.path or "/", parts.query, ""))
 
 
 def _duration_to_seconds(value):
@@ -26,6 +47,31 @@ def _duration_to_seconds(value):
         return int(float(value))
     except ValueError:
         return 0
+
+
+def _optional_int(value):
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _explicit(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "explicit"}
+
+
+def resolve_audio_url(base_url, enclosures, fallback_link=""):
+    """Choose a valid HTTP(S) audio enclosure and resolve relative URLs."""
+    for enclosure in enclosures or ():
+        href = (enclosure.get("href") or "").strip()
+        media_type = (enclosure.get("type") or "").lower()
+        if not href or (media_type and not media_type.startswith("audio/")):
+            continue
+        candidate = urljoin(base_url, href)
+        if candidate.startswith(("http://", "https://")):
+            return candidate
+    candidate = urljoin(base_url, (fallback_link or "").strip())
+    return candidate if candidate.startswith(("http://", "https://")) else ""
 
 
 def _clean(text):
@@ -79,16 +125,18 @@ def fetch_feed(feed_url):
         ),
         "image_url": image_url,
         "link": feed.get("link", ""),
+        "language": feed.get("language", ""),
+        "categories": ", ".join(
+            str(item.get("term", "")) for item in feed.get("tags", []) if item.get("term")
+        ),
+        "explicit": _explicit(feed.get("itunes_explicit")),
     }
 
     episodes = []
     for entry in parsed.entries:
-        enclosures = [e for e in entry.get("enclosures", []) if e.get("href")]
-        audio_url = ""
-        if enclosures:
-            audio_url = enclosures[0]["href"]
-        elif entry.get("link"):
-            audio_url = entry["link"]
+        audio_url = resolve_audio_url(
+            feed_url, entry.get("enclosures", []), entry.get("link", "")
+        )
 
         published = None
         if entry.get("published_parsed"):
@@ -107,5 +155,12 @@ def fetch_feed(feed_url):
             "audio_url": audio_url,
             "duration_seconds": _duration_to_seconds(entry.get("itunes_duration")),
             "published": published,
+            "season_number": _optional_int(entry.get("itunes_season")),
+            "episode_number": _optional_int(entry.get("itunes_episode")),
+            "explicit": _explicit(
+                entry.get("itunes_explicit")
+                if entry.get("itunes_explicit") is not None
+                else feed.get("itunes_explicit")
+            ),
         })
     return podcast, episodes

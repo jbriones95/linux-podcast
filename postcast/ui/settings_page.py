@@ -53,6 +53,40 @@ class SettingsPage(Adw.NavigationPage):
 
         pref.add(group)
 
+        notifications = Adw.PreferencesGroup()
+        notifications.set_title("Notifications")
+        notifications.set_description("Choose which background updates notify you.")
+        new_episode_row = Adw.ActionRow()
+        new_episode_row.set_title("New episode notifications")
+        new_episode_row.set_subtitle("Notify after scheduled feed refreshes")
+        new_episode_switch = Gtk.Switch()
+        new_episode_switch.set_valign(Gtk.Align.CENTER)
+        new_episode_switch.set_active(
+            self.app.db.get_setting("notify_new_episodes", "1") == "1"
+        )
+        new_episode_switch.connect(
+            "notify::active",
+            lambda switch, _pspec: self.app.db.set_setting(
+                "notify_new_episodes", "1" if switch.get_active() else "0"
+            ),
+        )
+        new_episode_row.add_suffix(new_episode_switch)
+        notifications.add(new_episode_row)
+        pref.add(notifications)
+
+        shortcuts = Adw.PreferencesGroup()
+        shortcuts.set_title("Keyboard")
+        shortcuts_row = Adw.ActionRow()
+        shortcuts_row.set_title("Keyboard shortcuts")
+        shortcuts_row.set_subtitle("View playback keyboard controls")
+        shortcuts_button = Gtk.Button(label="View")
+        shortcuts_button.add_css_class("flat")
+        shortcuts_button.set_valign(Gtk.Align.CENTER)
+        shortcuts_button.connect("clicked", lambda *_: self.window.open_shortcuts())
+        shortcuts_row.add_suffix(shortcuts_button)
+        shortcuts.add(shortcuts_row)
+        pref.add(shortcuts)
+
         backup = Adw.PreferencesGroup()
         backup.set_title("Backup and migration")
         backup.set_description("Move subscriptions and playback state between devices.")

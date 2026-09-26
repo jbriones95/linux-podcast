@@ -11,6 +11,9 @@ class Podcast:
     description: str = ""
     image_url: str = ""
     link: str = ""
+    language: str = ""
+    categories: str = ""
+    explicit: bool = False
     episode_count: int = 0
 
     @classmethod
@@ -25,6 +28,9 @@ class Podcast:
             description=row["description"] or "",
             image_url=row["image_url"] or "",
             link=row["link"] or "",
+            language=row["language"] or "",
+            categories=row["categories"] or "",
+            explicit=bool(row["explicit"]),
         )
 
 
@@ -42,10 +48,14 @@ class Episode:
     played: bool = False
     favorite: bool = False
     position_seconds: int = 0
+    season_number: Optional[int] = None
+    episode_number: Optional[int] = None
+    explicit: bool = False
 
     @property
     def is_downloaded(self) -> bool:
-        return bool(self.downloaded_path)
+        from pathlib import Path
+        return bool(self.downloaded_path and Path(self.downloaded_path).is_file())
 
     def playable_uri(self) -> str:
         from pathlib import Path
@@ -70,4 +80,7 @@ class Episode:
             played=bool(row["played"]),
             favorite=bool(row["favorite"]),
             position_seconds=row["position_seconds"] or 0,
+            season_number=row["season_number"],
+            episode_number=row["episode_number"],
+            explicit=bool(row["explicit"]),
         )

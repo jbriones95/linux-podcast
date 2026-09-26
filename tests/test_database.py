@@ -104,6 +104,40 @@ class DatabaseTests(unittest.TestCase):
             }
             self.assertIn("favorite", columns)
             self.assertEqual(db.conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+            tables = {
+                row[0]
+                for row in db.conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            self.assertIn("queue", tables)
+            self.assertIn("listening_stats", tables)
+            db.close()
+
+    def test_download_jobs_persist_and_reconcile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            podcast_id = db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show"}
+            )
+            db.sync_episodes(
+                podcast_id,
+                [{"guid": "one", "title": "One", "audio_url": "https://example.test/one.mp3"}],
+            )
+            episode_id = db.episodes(podcast_id)[0].id
+            self.assertTrue(db.enqueue_download(
+                episode_id, "https://example.test/one.mp3", "/tmp/one.mp3", "/tmp/one.part"
+            ))
+            self.assertFalse(db.enqueue_download(
+                episode_id, "https://example.test/one.mp3", "/tmp/one.mp3", "/tmp/one.part"
+            ))
+            db.update_download_job(episode_id, status="downloading", bytes_downloaded=12)
+            db.reconcile_download_jobs()
+            job = db.download_job(episode_id)
+            self.assertEqual(job["status"], "queued")
+            self.assertEqual(job["bytes_downloaded"], 12)
+            db.remove_download_job(episode_id)
+            self.assertIsNone(db.download_job(episode_id))
             db.close()
 
     def test_queue_is_persistent_and_deduplicated(self):
@@ -124,6 +158,8 @@ class DatabaseTests(unittest.TestCase):
             self.assertFalse(db.add_to_queue(episodes[0].id))
             self.assertTrue(db.add_to_queue(episodes[1].id))
             self.assertEqual([item[0].id for item in db.queue_items()], [episodes[0].id, episodes[1].id])
+            self.assertTrue(db.move_queue_item(episodes[1].id, 0))
+            self.assertEqual([item[0].id for item in db.queue_items()], [episodes[1].id, episodes[0].id])
             db.remove_from_queue(episodes[0].id)
             self.assertEqual([item[0].id for item in db.queue_items()], [episodes[1].id])
             db.clear_queue()
@@ -146,6 +182,22 @@ class DatabaseTests(unittest.TestCase):
             summary = db.listening_summary()
             self.assertEqual(summary[0]["seconds"], 45)
             self.assertEqual(summary[0]["completed"], 1)
+            db.close()
+
+    def test_playback_progress_persists_position_and_listening_together(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            podcast_id = db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show"}
+            )
+            db.sync_episodes(
+                podcast_id,
+                [{"guid": "one", "title": "One", "audio_url": "https://example.test/one.mp3"}],
+            )
+            episode_id = db.episodes(podcast_id)[0].id
+            db.save_playback_progress(episode_id, 42, 12)
+            self.assertEqual(db.episode(episode_id).position_seconds, 42)
+            self.assertEqual(db.listening_summary()[0]["seconds"], 12)
             db.close()
 
     def test_episode_can_be_resolved_for_external_playback(self):
@@ -183,6 +235,30 @@ class DatabaseTests(unittest.TestCase):
             recent = db.recent_episodes()
             self.assertEqual([item[0].title for item in recent], ["New", "Old"])
             self.assertEqual([item[1].title for item in recent], ["Two", "One"])
+            db.close()
+
+    def test_episode_queries_support_pagination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "library.db")
+            podcast_id = db.upsert_podcast(
+                {"feed_url": "https://example.test/feed.xml", "title": "Show"}
+            )
+            db.sync_episodes(
+                podcast_id,
+                [
+                    {"guid": str(i), "title": f"Episode {i}", "audio_url": f"https://example.test/{i}.mp3", "published": i}
+                    for i in range(5)
+                ],
+            )
+            self.assertEqual([e.title for e in db.episodes(podcast_id, limit=2)], ["Episode 4", "Episode 3"])
+            self.assertEqual(
+                [e.title for e in db.episodes(podcast_id, limit=2, offset=2)],
+                ["Episode 2", "Episode 1"],
+            )
+            self.assertEqual(
+                [e.title for e, _ in db.recent_episodes(limit=2, offset=2)],
+                ["Episode 2", "Episode 1"],
+            )
             db.close()
 
     def test_recent_episodes_keeps_all_episodes_from_the_same_day(self):

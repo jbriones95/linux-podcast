@@ -2,11 +2,13 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from .config import db_path
 from .models import Episode, Podcast
+from .performance import timed
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS podcasts (
@@ -68,8 +70,7 @@ class Database:
             # CREATE IF NOT EXISTS makes this safe for databases created before
             # schema versioning was introduced.
             self.conn.executescript(SCHEMA)
-            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            self.conn.commit()
+            current = 1
 
         if current < 2:
             columns = {
@@ -83,8 +84,7 @@ class Database:
             self.conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_episodes_favorite ON episodes(favorite)"
             )
-            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            self.conn.commit()
+            current = 2
 
         if current < 3:
             self.conn.executescript(
@@ -98,8 +98,7 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_queue_position ON queue(position, id);
                 """
             )
-            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            self.conn.commit()
+            current = 3
 
         if current < 4:
             self.conn.executescript(
@@ -112,8 +111,47 @@ class Database:
                 );
                 """
             )
-            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            self.conn.commit()
+            current = 4
+
+        if current < 5:
+            self.conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS download_jobs (
+                    episode_id INTEGER PRIMARY KEY REFERENCES episodes(id) ON DELETE CASCADE,
+                    url TEXT NOT NULL,
+                    destination_path TEXT NOT NULL,
+                    partial_path TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    bytes_downloaded INTEGER NOT NULL DEFAULT 0,
+                    total_bytes INTEGER,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    error_kind TEXT,
+                    error_message TEXT,
+                    position INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_download_jobs_status_position
+                    ON download_jobs(status, position, created_at);
+                """
+            )
+            current = 5
+
+        if current < 6:
+            self.conn.executescript(
+                """
+                ALTER TABLE podcasts ADD COLUMN language TEXT DEFAULT '';
+                ALTER TABLE podcasts ADD COLUMN categories TEXT DEFAULT '';
+                ALTER TABLE podcasts ADD COLUMN explicit INTEGER DEFAULT 0;
+                ALTER TABLE episodes ADD COLUMN season_number INTEGER;
+                ALTER TABLE episodes ADD COLUMN episode_number INTEGER;
+                ALTER TABLE episodes ADD COLUMN explicit INTEGER DEFAULT 0;
+                """
+            )
+            current = 6
+
+        self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        self.conn.commit()
 
     def close(self):
         with self._lock:
@@ -131,16 +169,22 @@ class Database:
                 "description": data.get("description", ""),
                 "image_url": data.get("image_url", ""),
                 "link": data.get("link", ""),
+                "language": data.get("language", ""),
+                "categories": data.get("categories", ""),
+                "explicit": 1 if data.get("explicit") else 0,
             }
             self.conn.execute(
-                """INSERT INTO podcasts (feed_url, title, author, description, image_url, link)
-                   VALUES (:feed_url, :title, :author, :description, :image_url, :link)
+                """INSERT INTO podcasts
+                   (feed_url, title, author, description, image_url, link, language, categories, explicit)
+                   VALUES (:feed_url, :title, :author, :description, :image_url, :link,
+                           :language, :categories, :explicit)
                    ON CONFLICT(feed_url) DO UPDATE SET
                      title=excluded.title, author=excluded.author,
                      description=excluded.description,
                      image_url=CASE WHEN excluded.image_url != ''
                                     THEN excluded.image_url ELSE podcasts.image_url END,
-                     link=excluded.link""",
+                      link=excluded.link, language=excluded.language,
+                      categories=excluded.categories, explicit=excluded.explicit""",
                 values,
             )
             self.conn.commit()
@@ -149,6 +193,7 @@ class Database:
             ).fetchone()
             return row["id"]
 
+    @timed("db.podcasts")
     def podcasts(self):
         with self._lock:
             rows = self.conn.execute(
@@ -165,6 +210,7 @@ class Database:
                 p.episode_count = counts.get(p.id, 0)
             return pod
 
+    @timed("db.podcast")
     def podcast(self, podcast_id) -> Podcast:
         with self._lock:
             row = self.conn.execute(
@@ -179,17 +225,27 @@ class Database:
             self.conn.commit()
 
     # ---- episodes ----
-    def episodes(self, podcast_id):
+    @timed("db.episodes")
+    def episodes(self, podcast_id, limit=None, offset=0):
         with self._lock:
-            rows = self.conn.execute(
-                """SELECT * FROM episodes WHERE podcast_id = ?
-                   ORDER BY COALESCE(published, 0) DESC""",
-                (podcast_id,),
-            ).fetchall()
+            query = """SELECT * FROM episodes WHERE podcast_id = ?
+                       ORDER BY COALESCE(published, 0) DESC, id DESC"""
+            params = [podcast_id]
+            if limit is not None:
+                query += " LIMIT ? OFFSET ?"
+                params.extend([int(limit), int(offset)])
+            rows = self.conn.execute(query, params).fetchall()
             return [Episode.from_row(r) for r in rows]
 
+    @timed("db.search_episodes")
     def search_episodes(
-        self, query="", favorites_only=False, unplayed_only=False, downloaded_only=False
+        self,
+        query="",
+        favorites_only=False,
+        unplayed_only=False,
+        downloaded_only=False,
+        limit=None,
+        offset=0,
     ):
         """Search local episode and podcast metadata with optional filters."""
         with self._lock:
@@ -210,19 +266,22 @@ class Database:
                 clauses.append("e.downloaded_path != ''")
 
             where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-            rows = self.conn.execute(
-                f"""SELECT e.*, p.id AS result_podcast_id,
+            sql = f"""SELECT e.*, p.id AS result_podcast_id,
                            p.feed_url AS result_feed_url, p.title AS result_podcast_title,
                            p.author AS result_podcast_author, p.description AS result_podcast_description,
                            p.image_url AS result_podcast_image_url, p.link AS result_podcast_link
-                    FROM episodes e JOIN podcasts p ON p.id = e.podcast_id
-                    {where}
-                    ORDER BY COALESCE(e.published, 0) DESC, e.id DESC""",
-                params,
-            ).fetchall()
+                     FROM episodes e JOIN podcasts p ON p.id = e.podcast_id
+                     {where}
+                     ORDER BY COALESCE(e.published, 0) DESC, e.id DESC"""
+            if limit is not None:
+                sql += " LIMIT ? OFFSET ?"
+                params.extend([int(limit), int(offset)])
+            rows = self.conn.execute(sql, params).fetchall()
             results = []
             for row in rows:
                 episode = Episode.from_row(row)
+                if downloaded_only and not episode.is_downloaded:
+                    continue
                 podcast = Podcast(
                     id=row["result_podcast_id"],
                     feed_url=row["result_feed_url"],
@@ -235,7 +294,8 @@ class Database:
                 results.append((episode, podcast))
             return results
 
-    def recent_episodes(self, limit=None):
+    @timed("db.recent_episodes")
+    def recent_episodes(self, limit=None, offset=0):
         """Return newest episodes across all subscribed podcasts."""
         with self._lock:
             query = """SELECT e.*, p.id AS result_podcast_id,
@@ -246,8 +306,8 @@ class Database:
                        ORDER BY COALESCE(e.published, 0) DESC, e.id DESC"""
             params = ()
             if limit is not None:
-                query += " LIMIT ?"
-                params = (int(limit),)
+                query += " LIMIT ? OFFSET ?"
+                params = (int(limit), int(offset))
             rows = self.conn.execute(query, params).fetchall()
             return self._episode_podcast_results(rows)
 
@@ -271,6 +331,7 @@ class Database:
             )
         return results
 
+    @timed("db.episode")
     def episode(self, episode_id) -> Episode:
         with self._lock:
             row = self.conn.execute(
@@ -303,6 +364,30 @@ class Database:
             )
             return episode, podcast
 
+    def episode_by_playable_uri(self, uri):
+        with self._lock:
+            local_path = unquote(urlparse(uri).path) if uri.startswith("file://") else uri
+            row = self.conn.execute(
+                """SELECT e.*, p.id AS result_podcast_id,
+                           p.feed_url AS result_feed_url, p.title AS result_podcast_title,
+                           p.author AS result_podcast_author, p.description AS result_podcast_description,
+                           p.image_url AS result_podcast_image_url, p.link AS result_podcast_link
+                    FROM episodes e JOIN podcasts p ON p.id=e.podcast_id
+                    WHERE e.audio_url=? OR e.downloaded_path=? OR e.downloaded_path=?""",
+                (uri, uri, local_path),
+            ).fetchone()
+            if row is None:
+                return None
+            return Episode.from_row(row), Podcast(
+                id=row["result_podcast_id"],
+                feed_url=row["result_feed_url"],
+                title=row["result_podcast_title"] or "",
+                author=row["result_podcast_author"] or "",
+                description=row["result_podcast_description"] or "",
+                image_url=row["result_podcast_image_url"] or "",
+                link=row["result_podcast_link"] or "",
+            )
+
     def sync_episodes(self, podcast_id, episodes):
         with self._lock:
             new_count = 0
@@ -319,13 +404,16 @@ class Database:
                 self.conn.execute(
                     """INSERT INTO episodes
                        (podcast_id, guid, title, description, audio_url,
-                        duration_seconds, published)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                        duration_seconds, published, season_number, episode_number, explicit)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                        ON CONFLICT(podcast_id, guid) DO UPDATE SET
                          title=excluded.title, description=excluded.description,
                          audio_url=excluded.audio_url,
-                         duration_seconds=excluded.duration_seconds,
-                         published=excluded.published""",
+                          duration_seconds=excluded.duration_seconds,
+                          published=excluded.published,
+                          season_number=excluded.season_number,
+                          episode_number=excluded.episode_number,
+                          explicit=excluded.explicit""",
                     (
                         podcast_id,
                         guid,
@@ -334,6 +422,9 @@ class Database:
                         ep["audio_url"],
                         int(ep.get("duration_seconds") or 0),
                         ep.get("published"),
+                        ep.get("season_number"),
+                        ep.get("episode_number"),
+                        1 if ep.get("explicit") else 0,
                     ),
                 )
             self.conn.commit()
@@ -356,6 +447,7 @@ class Database:
             self.conn.commit()
 
     # ---- playback queue ----
+    @timed("db.queue_items")
     def queue_items(self):
         with self._lock:
             rows = self.conn.execute(
@@ -410,6 +502,24 @@ class Database:
         with self._lock:
             self.conn.execute("DELETE FROM queue WHERE episode_id=?", (episode_id,))
             self.conn.commit()
+
+    def move_queue_item(self, episode_id, target_position):
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT episode_id FROM queue ORDER BY position, id"
+            ).fetchall()
+            ids = [row[0] for row in rows]
+            if episode_id not in ids or not ids:
+                return False
+            ids.remove(episode_id)
+            target_position = max(0, min(int(target_position), len(ids)))
+            ids.insert(target_position, episode_id)
+            self.conn.executemany(
+                "UPDATE queue SET position=? WHERE episode_id=?",
+                [(position, item_id) for position, item_id in enumerate(ids)],
+            )
+            self.conn.commit()
+            return True
 
     def clear_queue(self):
         with self._lock:
@@ -583,6 +693,25 @@ class Database:
             )
             self.conn.commit()
 
+    def save_playback_progress(self, episode_id, position_seconds, listened_seconds):
+        """Persist position and listening progress in one transaction."""
+        listened_seconds = max(0, int(listened_seconds))
+        with self._lock:
+            self.conn.execute(
+                "UPDATE episodes SET position_seconds=? WHERE id=?",
+                (int(position_seconds), episode_id),
+            )
+            if listened_seconds:
+                self.conn.execute(
+                    """INSERT INTO listening_stats(episode_id, seconds, completed, last_played)
+                       VALUES (?, ?, 0, ?)
+                       ON CONFLICT(episode_id) DO UPDATE SET
+                         seconds=listening_stats.seconds + excluded.seconds,
+                         last_played=excluded.last_played""",
+                    (episode_id, listened_seconds, int(time.time())),
+                )
+            self.conn.commit()
+
     def set_downloaded(self, episode_id, path):
         with self._lock:
             self.conn.execute(
@@ -593,6 +722,100 @@ class Database:
     def clear_download(self, episode_id):
         with self._lock:
             self.conn.execute("UPDATE episodes SET downloaded_path='' WHERE id=?", (episode_id,))
+            self.conn.commit()
+
+    # ---- durable downloads ----
+    def enqueue_download(self, episode_id, url, destination_path, partial_path):
+        now = int(time.time())
+        with self._lock:
+            existing = self.conn.execute(
+                "SELECT status FROM download_jobs WHERE episode_id = ?", (episode_id,)
+            ).fetchone()
+            if existing is not None:
+                if existing["status"] != "failed":
+                    return False
+                self.conn.execute(
+                    """UPDATE download_jobs SET url=?, destination_path=?, partial_path=?,
+                       status='queued', bytes_downloaded=0, total_bytes=NULL,
+                       error_kind=NULL, error_message=NULL, updated_at=?
+                       WHERE episode_id=?""",
+                    (url, str(destination_path), str(partial_path), now, episode_id),
+                )
+                self.conn.commit()
+                return True
+            position = self.conn.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM download_jobs"
+            ).fetchone()[0]
+            self.conn.execute(
+                """INSERT INTO download_jobs
+                   (episode_id, url, destination_path, partial_path, status,
+                    position, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)""",
+                (episode_id, url, str(destination_path), str(partial_path), position, now, now),
+            )
+            self.conn.commit()
+            return True
+
+    def download_job(self, episode_id):
+        jobs = self.download_jobs(episode_id=episode_id)
+        return jobs[0] if jobs else None
+
+    def download_jobs(self, statuses=None, episode_id=None):
+        with self._lock:
+            clauses = []
+            params = []
+            if statuses:
+                placeholders = ",".join("?" for _ in statuses)
+                clauses.append(f"j.status IN ({placeholders})")
+                params.extend(statuses)
+            if episode_id is not None:
+                clauses.append("j.episode_id = ?")
+                params.append(episode_id)
+            where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+            rows = self.conn.execute(
+                f"""SELECT j.*, e.title, e.audio_url, p.title AS podcast_title
+                    FROM download_jobs j
+                    JOIN episodes e ON e.id = j.episode_id
+                    JOIN podcasts p ON p.id = e.podcast_id
+                    {where}
+                    ORDER BY j.position, j.created_at""",
+                params,
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def update_download_job(self, episode_id, **fields):
+        allowed = {
+            "status", "bytes_downloaded", "total_bytes", "attempts",
+            "error_kind", "error_message", "position", "url",
+            "destination_path", "partial_path",
+        }
+        updates = {key: value for key, value in fields.items() if key in allowed}
+        if not updates:
+            return False
+        updates["updated_at"] = int(time.time())
+        with self._lock:
+            assignments = ", ".join(f"{key} = ?" for key in updates)
+            values = list(updates.values()) + [episode_id]
+            cursor = self.conn.execute(
+                f"UPDATE download_jobs SET {assignments} WHERE episode_id = ?", values
+            )
+            self.conn.commit()
+            return cursor.rowcount == 1
+
+    def reconcile_download_jobs(self):
+        with self._lock:
+            self.conn.execute(
+                "UPDATE download_jobs SET status='queued', updated_at=? WHERE status='downloading'",
+                (int(time.time()),),
+            )
+            self.conn.execute(
+                "DELETE FROM download_jobs WHERE episode_id NOT IN (SELECT id FROM episodes)"
+            )
+            self.conn.commit()
+
+    def remove_download_job(self, episode_id):
+        with self._lock:
+            self.conn.execute("DELETE FROM download_jobs WHERE episode_id=?", (episode_id,))
             self.conn.commit()
 
     # ---- settings ----

@@ -1,16 +1,15 @@
-import threading
-
 import gi
 
 gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gtk, GLib, Pango
 
-from ..feed import fetch_feed
 from .episode_row import EpisodeRow
 
 
 class LibraryPage(Adw.NavigationPage):
+    _PAGE_SIZE = 40
+
     def __init__(self, window):
         super().__init__(title="Postcast")
         self.window = window
@@ -37,15 +36,11 @@ class LibraryPage(Adw.NavigationPage):
         self._search_entry = Gtk.SearchEntry()
         self._search_entry.set_placeholder_text("Search library")
         self._search_entry.set_hexpand(True)
-        # Keep GTK traversal and Phosh from focusing the entry on startup. It
-        # becomes focusable only from the explicit tap handler below.
-        self._search_entry.set_focusable(False)
-        self._search_entry.set_focus_on_click(False)
-        search_gesture = Gtk.GestureClick.new()
-        search_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        search_gesture.connect("pressed", self._on_search_pressed)
-        self._search_entry.add_controller(search_gesture)
-        self._search_entry.connect("search-changed", lambda *_: self.refresh())
+        self._search_refresh_source = None
+        self._search_generation = 0
+        self._search_offset = 0
+        self._load_more_button = None
+        self._search_entry.connect("search-changed", self._on_search_changed)
 
         tools = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         tools.set_margin_start(12)
@@ -68,11 +63,6 @@ class LibraryPage(Adw.NavigationPage):
         queue_btn.set_size_request(44, 44)
         queue_btn.connect("clicked", lambda *_: window.open_queue())
         actions.append(queue_btn)
-        sync_btn = Gtk.Button(icon_name="document-save-symbolic")
-        sync_btn.set_tooltip_text("Backup and sync library")
-        sync_btn.set_size_request(44, 44)
-        sync_btn.connect("clicked", lambda *_: window.open_settings())
-        actions.append(sync_btn)
 
         self._listbox = Gtk.ListBox()
         self._listbox.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -114,26 +104,20 @@ class LibraryPage(Adw.NavigationPage):
         self._search_entry.grab_focus()
 
     def reset_search_focus(self):
-        self._search_entry.set_focusable(False)
-        self._search_entry.set_focus_on_click(False)
         self.initial_focus_target.grab_focus()
 
 
     def refresh(self):
+        self._search_generation += 1
+        generation = self._search_generation
         while (row := self._listbox.get_first_child()) is not None:
             self._listbox.remove(row)
+        self._load_more_button = None
 
         query = self._search_entry.get_text().strip()
         if query:
-            results = self.app.db.search_episodes(query)
-            if not results:
-                self._status.set_title("No matching episodes")
-                self._status.set_description("Try a different search or filter.")
-                self._stack.set_visible_child_name("empty")
-                return
-            self._stack.set_visible_child_name("list")
-            for episode, podcast in results:
-                self._listbox.append(EpisodeRow(self.window, episode, podcast))
+            self._search_offset = 0
+            self._load_search_page(query, generation, "all")
             return
 
         podcasts = self.app.db.podcasts()
@@ -178,6 +162,83 @@ class LibraryPage(Adw.NavigationPage):
             row.set_child(box)
             self._listbox.append(row)
 
+    def _load_search_page(self, query, generation, filter_mode):
+        favorites = filter_mode == "favorites"
+        unplayed = filter_mode == "unplayed"
+        downloaded = filter_mode == "downloaded"
+        offset = self._search_offset
+
+        def work():
+            return self.app.db.search_episodes(
+                query,
+                favorites_only=favorites,
+                unplayed_only=unplayed,
+                downloaded_only=downloaded,
+                limit=self._PAGE_SIZE,
+                offset=offset,
+            )
+
+        def done(results):
+            if generation != self._search_generation:
+                return
+            if isinstance(results, Exception):
+                self._status.set_title("Search failed")
+                self._status.set_description("Try again or check your connection.")
+                self._stack.set_visible_child_name("empty")
+                return
+            self._render_search_results(results, query, generation, filter_mode)
+
+        self.app.async_tasks.submit(
+            "library-search", work, done, lambda callback: GLib.idle_add(callback)
+        )
+
+    def _render_search_results(self, results, query, generation, filter_mode):
+        if not results and self._search_offset == 0:
+            self._status.set_title("No episodes found")
+            self._status.set_description("Try a different search or filter.")
+            self._stack.set_visible_child_name("empty")
+            return
+        self._stack.set_visible_child_name("list")
+        self._search_offset += len(results)
+        self._append_search_batch(results, 0, query, generation, filter_mode)
+
+    def _append_search_batch(self, results, index, query, generation, filter_mode):
+        if generation != self._search_generation:
+            return GLib.SOURCE_REMOVE
+        for episode, podcast in results[index : index + 10]:
+            self._listbox.append(EpisodeRow(self.window, episode, podcast))
+        index += 10
+        if index < len(results):
+            GLib.idle_add(
+                self._append_search_batch, results, index, query, generation, filter_mode
+            )
+            return GLib.SOURCE_REMOVE
+        if len(results) == self._PAGE_SIZE:
+            self._load_more_button = Gtk.Button(label="Load more episodes")
+            self._load_more_button.set_margin_top(8)
+            self._load_more_button.set_margin_bottom(16)
+            self._load_more_button.connect(
+                "clicked", lambda *_: self._load_next_search_page(query, generation, filter_mode)
+            )
+            self._listbox.append(self._load_more_button)
+        return GLib.SOURCE_REMOVE
+
+    def _load_next_search_page(self, query, generation, filter_mode):
+        if self._load_more_button is not None:
+            self._listbox.remove(self._load_more_button)
+            self._load_more_button = None
+        self._load_search_page(query, generation, filter_mode)
+
+    def _on_search_changed(self, _entry):
+        if self._search_refresh_source is not None:
+            GLib.source_remove(self._search_refresh_source)
+        self._search_refresh_source = GLib.timeout_add(250, self._refresh_search)
+
+    def _refresh_search(self):
+        self._search_refresh_source = None
+        self.refresh()
+        return GLib.SOURCE_REMOVE
+
     def _art_cb(self, image):
         def cb(texture):
             if texture is not None:
@@ -191,24 +252,10 @@ class LibraryPage(Adw.NavigationPage):
             self.window.open_podcast(row.podcast.id)
 
     def _refresh_all(self):
-        podcasts = self.app.db.podcasts()
-        if not podcasts:
+        if not self.app.db.podcasts():
             self.window.toast("No feeds to refresh yet.")
             return
-
-        def work():
-            for pod in podcasts:
-                try:
-                    data, episodes = fetch_feed(pod.feed_url)
-                    self.app.db.upsert_podcast(data)
-                    self.app.db.sync_episodes(pod.id, episodes)
-                except Exception:
-                    continue
-            GLib.idle_add(self._all_done)
-
-        threading.Thread(target=work, daemon=True).start()
-
-    def _all_done(self):
-        self.app.refresh_library()
-        self.refresh()
-        self.window.toast("All feeds refreshed.")
+        if self.app.start_refresh_feeds():
+            self.window.toast("Refreshing feeds…")
+        else:
+            self.window.toast("A refresh is already in progress.")

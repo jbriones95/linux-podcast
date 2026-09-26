@@ -31,16 +31,9 @@ jobs:
         run: |
           set -euo pipefail
           git clone -q --depth 1 https://gitlab.postmarketos.org/postMarketOS/pmaports.git /tmp/pmaports
-          mkdir -p /tmp/pmaports/testing/postcast
-          cp APKBUILD /tmp/pmaports/testing/postcast/APKBUILD
-          sed -i 's/^pkgrel=0/pkgrel=1/' /tmp/pmaports/testing/postcast/APKBUILD
-          cp data/io.postcast.Postcast.svg /tmp/pmaports/testing/postcast/
-          cp data/io.postcast.Postcast.desktop /tmp/pmaports/testing/postcast/
-          cp data/io.postcast.Postcast.metainfo.xml /tmp/pmaports/testing/postcast/
-          mkdir -p /tmp/postcast-src/postcast-0.2.4
-          cp -r postcast data setup.py /tmp/postcast-src/postcast-0.2.4/
-          tar -C /tmp/postcast-src -czf \
-            /tmp/pmaports/testing/postcast/postcast-0.2.4.tar.gz postcast-0.2.4
+           mkdir -p /tmp/pmaports/main/postcast
+           cp APKBUILD /tmp/pmaports/main/postcast/APKBUILD
+           sed -i 's/^pkgrel=0/pkgrel=1/' /tmp/pmaports/main/postcast/APKBUILD
 
       - name: Run tests and package checks
         run: |

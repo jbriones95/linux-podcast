@@ -4,6 +4,8 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gtk, Pango
 
+from ..feed import normalize_feed_url
+
 
 class SearchPage(Adw.NavigationPage):
     def __init__(self, window):
@@ -18,12 +20,6 @@ class SearchPage(Adw.NavigationPage):
 
         self.entry = Gtk.SearchEntry(placeholder_text="Search podcasts…")
         self.entry.set_hexpand(True)
-        self.entry.set_focusable(False)
-        self.entry.set_focus_on_click(False)
-        search_gesture = Gtk.GestureClick.new()
-        search_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        search_gesture.connect("pressed", self._on_search_pressed)
-        self.entry.add_controller(search_gesture)
         self.entry.connect("activate", self._on_search)
         self.entry.set_search_delay(600)
         self.entry.connect("search-changed", self._on_search)
@@ -37,12 +33,6 @@ class SearchPage(Adw.NavigationPage):
         rss_title.add_css_class("heading")
         self.rss_entry = Gtk.Entry(placeholder_text="https://example.com/feed.xml")
         self.rss_entry.set_hexpand(True)
-        self.rss_entry.set_focusable(False)
-        self.rss_entry.set_focus_on_click(False)
-        rss_gesture = Gtk.GestureClick.new()
-        rss_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        rss_gesture.connect("pressed", self._on_rss_pressed)
-        self.rss_entry.add_controller(rss_gesture)
         self.rss_button = Gtk.Button(label="Add")
         self.rss_button.add_css_class("suggested-action")
         self.rss_button.set_size_request(72, 48)
@@ -93,9 +83,10 @@ class SearchPage(Adw.NavigationPage):
         self.rss_entry.grab_focus()
 
     def _on_rss_add(self, *_args):
-        url = self.rss_entry.get_text().strip()
-        if not url.startswith(("http://", "https://")):
-            self.window.toast("Enter a valid http(s) RSS feed URL.")
+        try:
+            url = normalize_feed_url(self.rss_entry.get_text())
+        except ValueError as exc:
+            self.window.toast(str(exc))
             return
         self.rss_button.set_sensitive(False)
         self.rss_button.set_label("Adding…")
@@ -121,11 +112,18 @@ class SearchPage(Adw.NavigationPage):
             self._stack.set_visible_child_name("empty")
             return
 
+        self._status.set_icon_name("system-search-symbolic")
+        self._status.set_title("Searching…")
+        self._status.set_description("Looking for podcasts.")
+        self._stack.set_visible_child_name("empty")
+
         def on_results(results):
             if generation != self._search_generation:
                 return
             if isinstance(results, Exception):
-                self.window.toast(f"Search failed: {results}")
+                self._status.set_title("Search failed")
+                self._status.set_description("Check your connection and try again.")
+                self._stack.set_visible_child_name("empty")
                 return
             self._render(results)
 

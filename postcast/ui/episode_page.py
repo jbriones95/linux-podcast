@@ -42,12 +42,17 @@ class EpisodePage(Adw.NavigationPage):
         title.add_css_class("title-1")
         content.append(title)
 
-        meta = Gtk.Label(
-            label=(
-                f"{format_date(self.episode.published)} · "
-                f"{format_duration(self.episode.duration_seconds)}"
-            )
-        )
+        meta_parts = [
+            format_date(self.episode.published),
+            format_duration(self.episode.duration_seconds),
+        ]
+        if self.episode.season_number is not None or self.episode.episode_number is not None:
+            season = f"S{self.episode.season_number}" if self.episode.season_number is not None else ""
+            number = f"E{self.episode.episode_number}" if self.episode.episode_number is not None else ""
+            meta_parts.insert(0, f"{season}{number}")
+        if self.episode.explicit:
+            meta_parts.append("Explicit")
+        meta = Gtk.Label(label=" · ".join(meta_parts))
         meta.add_css_class("dim-label")
         content.append(meta)
 

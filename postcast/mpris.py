@@ -1,7 +1,10 @@
 import gi
+from datetime import datetime, timezone
 
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib
+
+from .mpris_policy import seek_target
 
 
 BUS_NAME = "org.mpris.MediaPlayer2.Postcast"
@@ -72,7 +75,11 @@ class MprisService:
         )
         app.connect("playback-state", self._on_state)
         app.connect("position", self._on_position)
+        app.connect("seeked", self._on_seeked)
         app.connect("now-playing", self._on_now_playing)
+        app.connect("volume-changed", self._on_volume_changed)
+        app.connect("rate-changed", self._on_rate_changed)
+        app.connect("queue-changed", self._on_queue_changed)
 
     def stop(self):
         if self.connection is not None:
@@ -111,7 +118,7 @@ class MprisService:
                 if method == "Next":
                     playback.play_next()
                 elif method == "Previous":
-                    playback.play_previous()
+                    playback.smart_rewind()
                 elif method == "Pause":
                     playback.pause()
                 elif method == "PlayPause":
@@ -123,18 +130,21 @@ class MprisService:
                 elif method == "Seek":
                     offset = params.unpack()[0]
                     position, duration = playback.player.position()
-                    target = max(0, position + int(offset / 1_000_000))
-                    if duration:
-                        target = min(target, duration)
+                    target = seek_target(position, duration, offset / 1_000_000)
                     playback.player.seek(target)
                 elif method == "SetPosition":
-                    _track_id, position = params.unpack()
+                    track_id, position = params.unpack()
+                    if track_id != self._track_id():
+                        raise ValueError("TrackId does not match the current episode")
                     playback.player.seek(int(position / 1_000_000))
                 elif method == "OpenUri":
                     uri = params.unpack()[0]
-                    match = self.app.db.episode_by_audio_url(uri)
-                    if match is not None:
-                        self.app.playback.play_episode(match[1], match[0])
+                    if not uri.startswith(("http://", "https://", "file://")):
+                        raise ValueError("Unsupported URI scheme")
+                    match = self.app.db.episode_by_playable_uri(uri)
+                    if match is None:
+                        raise ValueError("URI is not in the library")
+                    self.app.playback.play_episode(match[1], match[0])
             invocation.return_value(GLib.Variant("()", ()))
         except Exception as exc:
             invocation.return_dbus_error("org.mpris.MediaPlayer2.Error", str(exc))
@@ -154,7 +164,6 @@ class MprisService:
 
         playback = self.app.playback
         player = self.app.player
-        position, _duration = player.position()
         values = {
             "PlaybackStatus": GLib.Variant("s", self._status()),
             "LoopStatus": GLib.Variant("s", "None"),
@@ -162,16 +171,17 @@ class MprisService:
             "Shuffle": GLib.Variant("b", False),
             "Metadata": GLib.Variant("a{sv}", self._metadata()),
             "Volume": GLib.Variant("d", playback.volume()),
-            "Position": GLib.Variant("x", int(position * 1_000_000)),
             "MinimumRate": GLib.Variant("d", 0.5),
             "MaximumRate": GLib.Variant("d", 3.0),
-            "CanGoNext": GLib.Variant("b", playback.current_episode() is not None),
-            "CanGoPrevious": GLib.Variant("b", playback.current_episode() is not None),
-            "CanPlay": GLib.Variant("b", playback.current_episode() is not None),
-            "CanPause": GLib.Variant("b", playback.current_episode() is not None),
+            "CanGoNext": GLib.Variant("b", playback.can_go_next()),
+            "CanGoPrevious": GLib.Variant("b", playback.can_go_previous()),
+            "CanPlay": GLib.Variant("b", bool(playback.current_episode() and playback.current_episode().playable_uri())),
+            "CanPause": GLib.Variant("b", bool(playback.current_episode() and playback.current_episode().playable_uri())),
             "CanSeek": GLib.Variant("b", playback.current_episode() is not None),
             "CanControl": GLib.Variant("b", True),
         }
+        if name == "Position":
+            return GLib.Variant("x", int(player.position()[0] * 1_000_000))
         return values.get(name)
 
     def _set_property(self, _connection, _sender, _path, interface, name, value):
@@ -181,6 +191,10 @@ class MprisService:
             self.app.playback.set_volume(value.unpack())
         elif name == "Rate":
             self.app.playback.set_speed(value.unpack())
+        elif name == "LoopStatus":
+            return value.unpack() == "None"
+        elif name == "Shuffle":
+            return value.unpack() is False
         else:
             return False
         self._emit_changed([name])
@@ -201,12 +215,24 @@ class MprisService:
             "xesam:title": GLib.Variant("s", episode.title or "Untitled episode"),
             "xesam:album": GLib.Variant("s", podcast.title if podcast else ""),
             "xesam:artist": GLib.Variant("as", [podcast.author] if podcast and podcast.author else []),
-            "xesam:url": GLib.Variant("s", episode.audio_url or ""),
+            "xesam:url": GLib.Variant("s", episode.playable_uri() or ""),
             "mpris:length": GLib.Variant("x", int((episode.duration_seconds or 0) * 1_000_000)),
         }
+        if episode.description:
+            values["xesam:comment"] = GLib.Variant("as", [episode.description])
+        if episode.published:
+            values["xesam:contentCreated"] = GLib.Variant(
+                "s", datetime.fromtimestamp(episode.published, timezone.utc).isoformat()
+            )
         if podcast and podcast.image_url:
-            values["mpris:artUrl"] = GLib.Variant("s", podcast.image_url)
+            values["mpris:artUrl"] = GLib.Variant(
+                "s", self.app.artwork.cached_uri(podcast.image_url) or podcast.image_url
+            )
         return values
+
+    def _track_id(self):
+        episode = self.app.playback.current_episode()
+        return f"/org/mpris/MediaPlayer2/Track/{episode.id}" if episode else "/"
 
     def _emit_changed(self, names):
         if self.connection is None:
@@ -227,10 +253,40 @@ class MprisService:
         )
 
     def _on_state(self, _app, _state):
-        self._emit_changed(["PlaybackStatus"])
+        self._emit_changed(
+            ["PlaybackStatus", "CanPlay", "CanPause", "CanSeek", "CanGoNext", "CanGoPrevious"]
+        )
 
     def _on_position(self, _app, _position, _duration):
         self._emit_changed(["Position"])
 
+    def _on_seeked(self, _app, position):
+        self._emit_seeked(position)
+        self._emit_changed(["Position"])
+
     def _on_now_playing(self, _app, _podcast, _episode):
-        self._emit_changed(["Metadata", "CanGoNext", "CanGoPrevious"])
+        self._emit_changed(
+            [
+                "Metadata", "Position", "PlaybackStatus", "CanPlay", "CanPause",
+                "CanSeek", "CanGoNext", "CanGoPrevious",
+            ]
+        )
+
+    def _on_volume_changed(self, _app, _value):
+        self._emit_changed(["Volume"])
+
+    def _on_rate_changed(self, _app, _value):
+        self._emit_changed(["Rate"])
+
+    def _on_queue_changed(self, _app):
+        self._emit_changed(["CanGoNext", "CanGoPrevious"])
+
+    def _emit_seeked(self, position):
+        if self.connection is not None:
+            self.connection.emit_signal(
+                None,
+                OBJECT_PATH,
+                "org.mpris.MediaPlayer2.Player",
+                "Seeked",
+                GLib.Variant("(x)", (int(position * 1_000_000),)),
+            )

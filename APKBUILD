@@ -19,12 +19,8 @@ build() {
 package() {
 	python3 setup.py install --prefix=/usr --root="$pkgdir"
 
-	# Install a *relocatable* launcher instead of the setuptools easy-install
-	# console script. The generated script bakes in the buildroot's absolute
-	# path to python (e.g. /usr/sbin/python3), which does not exist on the
-	# target device and makes phosh report "Startup ... timed out". Running
-	# the app as a module with the explicit interpreter is portable and was
-	# verified on-device (io.postcast.Postcast owns its D-Bus name).
+	# Install a relocatable launcher instead of the setuptools easy-install
+	# console script, whose buildroot interpreter path is not portable.
 	install -Dm755 /dev/stdin "$pkgdir/usr/bin/postcast" <<'LAUNCH'
 #!/usr/bin/python3
 from postcast.__main__ import main

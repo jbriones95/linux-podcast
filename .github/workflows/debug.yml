@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           source /tmp/pmbvenv/bin/activate
-          cd /tmp/pmaports/testing/postcast
+           cd /tmp/pmaports/main/postcast
           pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork checksum postcast
           pmbootstrap -p /tmp/pmaports -w /tmp/pmbwork \
             build --arch aarch64 --force postcast
